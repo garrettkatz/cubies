@@ -10,14 +10,15 @@ import matplotlib.pyplot as pt
 import itertools as it
 from matplotlib.patches import Polygon
 
+# Set up color enum and rgb tuples
 _R, _G, _B, _W, _Y, _O = range(1,7)
 _colors = {
-    _R: (1.0,0.0,0.0), # red
-    _G: (0.0,1.0,0.0), # green
-    _B: (0.0,0.0,1.0), # blue
-    _W: (1.0,1.0,1.0), # white
-    _Y: (1.0,1.0,0.0), # yellow
-    _O: (1.0,0.6,0.0), # orange
+    _R: (1.0, 0.0, 0.0), # red
+    _G: (0.0, 1.0, 0.0), # green
+    _B: (0.0, 0.0, 1.0), # blue
+    _W: (1.0, 1.0, 1.0), # white
+    _Y: (1.0, 1.0, 0.0), # yellow
+    _O: (1.0, 0.6, 0.0), # orange
 }
 
 def solved_state(N):
@@ -30,16 +31,15 @@ def solved_state(N):
     solved[ :, :,-1,2] = _G
     return solved
 
-def do_action(state, axis, depth, num_turns):
-    # rotate cubie positions
-    index = [slice(None)]*4
-    index[axis] = depth
-    for turn in range(num_turns):
-        state[tuple(index)] = np.rot90(state[tuple(index)], axes=(0,1))
-        # rotate cubies
-        swap = [d for d in range(3) if d != axis]
-        state[tuple(index[:3])+(swap,)] = state[tuple(index[:3])+(swap[::-1],)]
-    return state
+def rotx_(state, depth, num_turns):
+    state[depth,:,:,:] = np.rot90(state[depth,:,:,:], k=num_turns, axes=(0,1))
+    if num_turns % 2 == 1: state[depth,:,:,(1,2)] = state[depth,:,:,(2,1)]
+def roty_(state, depth, num_turns):
+    state[:,depth,:,:] = np.rot90(state[:,depth,:,:], k=num_turns, axes=(0,1))
+    if num_turns % 2 == 1: state[:,depth,:,(2,0)] = state[:,depth,:,(0,2)]
+def rotz_(state, depth, num_turns):
+    state[:,:,depth,:] = np.rot90(state[:,:,depth,:], k=num_turns, axes=(0,1))
+    if num_turns % 2 == 1: state[:,:,depth,(0,1)] = state[:,:,depth,(1,0)]
 
 def render(ax, state, x0=0, y0=0):
     angles = -np.arange(3) * np.pi * 2 / 3
@@ -60,7 +60,8 @@ if __name__ == "__main__":
 
     ax = pt.gca()
     state = solved_state(3)
-    state = do_action(state, 1, 0, 3)
+    # state = do_action(state, 1, 0, 3)
+    rotz_(state, 0, 1)
 
     render(ax, state, 0, 0)
     ax.axis("equal")
