@@ -57,7 +57,7 @@ def perform(action, state):
     return perform_(action, state.copy())
 def valid_actions(state):
     N = state.shape[0]
-    return it.product((rotx_, roty_, rotz_), range(N), (0,1,2,3))
+    return it.product((rotx_, roty_, rotz_), range(N), (-3,-2,-1,1,2,3))
 
 def render(ax, state, x0=0, y0=0):
     angles = -np.arange(3) * np.pi * 2 / 3
@@ -77,7 +77,7 @@ class PatternDatabase:
     def __init__(self):
         pass
     def query(self, state):
-        return True
+        return False
     def result(self):
         return []
 
