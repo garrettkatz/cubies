@@ -84,12 +84,15 @@ class CubeDomain:
             permuted[:,:,p,:] = np.rot90(permuted[:,:,p,:], axes=(0,1))
             permuted[:,:,p,(0,1)] = permuted[:,:,p,(1,0)]
             twist_permutation[2, p] = permuted.flat[face_index]
-
+        
         # memoize results
         self.N = N
         self.face_index = face_index
-        self.solved_state = solved_state
+        self._solved_state = solved_state
         self.twist_permutation = twist_permutation
+    
+    def solved_state(self):
+        return self._solved_state.copy()
     
     def valid_actions(self, state):
         # action format: (rotation_axis, plane_index, num_twists)
@@ -104,7 +107,7 @@ class CubeDomain:
         return state
 
     def is_solved_in(self, state):
-        return (state == self.solved_state).all()
+        return (state == self._solved_state).all()
     
     def render(self, state, ax, x0=0, y0=0):
         # ax is matplotlib Axes object
@@ -139,7 +142,7 @@ if __name__ == "__main__":
     domain = CubeDomain(4)
     actions = [(1, 0, 1), (0, 1, 1), (2, 2, 1), (1, 0, 1)]
     # actions = [(0,0,1)]
-    state = domain.solved_state
+    state = domain.solved_state()
 
     ax = pt.subplot(1, len(actions)+1, 1)
     domain.render(state, ax, 0, 0)
