@@ -40,31 +40,50 @@ class PatternDatabase:
 
 if __name__ == "__main__":
 
-    from cube import CubeDomain
-    domain = CubeDomain(2)
-    state = domain.solved_state()
-    
-    from tree import SearchTree
-    tree = SearchTree(domain, max_depth=1)
-    patterns = np.array([state[permutation] for _, permutation in tree])
-    patterns[:,5] = 0
-    patterns[:,6] = 8
-    macros = [actions for actions, _ in tree]
+    # from cube import CubeDomain
+    # from tree import SearchTree
+    # domain = CubeDomain(2)
+    # state = domain.solved_state()    
+    # tree = SearchTree(domain, max_depth=1)
+    # patterns = np.array([state[permutation] for _, permutation in tree])
+    # patterns[:,5] = 0
+    # patterns[:,6] = 8
+    # macros = [actions for actions, _ in tree]
     
     # patterns = state[np.newaxis,:].copy()
     # patterns[:,0] = 2
     # patterns[:,1] = 0
     # macros = [((1,0,1),)]
+    
+    # states = [domain.perform((1,0,1), state)]
+    
+    patterns = np.array([
+        [1,2,3,4,5,6],
+        [1,2,3,4,5,0],
+        [0,2,3,7,5,7],
+        [0,2,8,7,8,7],
+        ])
+    macros = [(1,),(2,),(3,),(4,)]
 
     pattern_database = PatternDatabase(patterns, macros)
+    
+    states = [
+        np.array([1,2,3,4,5,6]),
+        np.array([1,2,3,4,5,5]),
+        np.array([1,2,3,4,5,4]),
+        np.array([1,2,3,4,3,4]),
+        np.array([2,3,4,5,6,1]),
+        ]
 
-    # Non-empty macro if state matches a database pattern
-    matched = pattern_database.query(state)
-    print(matched)
-    print(pattern_database.result())
+    for state in states:
 
-    matched = pattern_database.query(domain.perform((1,0,1), state))
-    print(matched)
-    print(pattern_database.result())
+        matched = pattern_database.query(state)
+        print()
+        print(state)
+        print(matched)
+        if matched:
+            print(pattern_database.patterns[pattern_database.match_index])
+            print(pattern_database.result())
+
 
 
