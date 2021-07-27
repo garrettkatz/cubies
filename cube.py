@@ -128,14 +128,6 @@ class CubeDomain:
                 c = _colors[cube[tuple(np.roll((a,b,0),d))+((d+2) % 3,)]]
                 ax.add_patch(Polygon(xy, facecolor=c, edgecolor='k'))
 
-class PatternDatabase:
-    def __init__(self):
-        pass
-    def query(self, state):
-        return False
-    def result(self):
-        return []
-
 if __name__ == "__main__":
 
 

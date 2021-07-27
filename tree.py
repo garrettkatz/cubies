@@ -49,6 +49,7 @@ if __name__ == "__main__":
     # for actions, permutation in tree:
     #     print(actions, permutation)
 
+    # iterate over search tree object and visually inspect states and their order, esp those more than 1 action away
     tree = SearchTree(domain, max_depth=2)
     import matplotlib.pyplot as pt
     for n, (actions, permutation) in enumerate(tree):

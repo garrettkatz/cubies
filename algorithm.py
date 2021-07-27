@@ -1,27 +1,23 @@
-
-def path_to_macro(state, problem, pattern_database, max_depth):
-    # returns result = (path, macro), each a sequence of actions
+def macro_search(state, problem, bfs_tree, pattern_database, max_depth):
+    # returns result = (actions, macro)
     # or result = False if there is no path to a macro
-
-    # Empty path and macro if problem is already solved
-    if problem.is_solved_in(state): return [], []
-
-    # Empty path but non-macro if state matches a database pattern
-    matched = pattern_database.query(state)
-    if matched: return [], pattern_database.result()
-
-    # Failure if max search depth is reached
-    if max_depth == 0: return False    
-
-    # Recursive search for remaining path to macro
-    for action in problem.valid_actions(state):
-        new_state = problem.perform(action, state)
-        result = path_to_macro(new_state, problem, pattern_database, max_depth-1)
-        if result is not False:
-            path, macro = result
-            return [action] + path, macro
     
-    # Failure if recursive search did not find a path to a macro
+    for actions, permutation in bfs_tree:
+
+        # Don't exceed maximum search depth
+        if len(actions) > max_depth: continue    
+
+        # Compute descendent state
+        descendent = state[permutation]
+
+        # Empty macro if problem is solved in descendent state
+        if problem.is_solved_in(descendent): return actions, []
+        
+        # Non-empty macro if state matches a database pattern
+        matched = pattern_database.query(descendent)
+        if matched: return actions, pattern_database.result()
+
+    # Failure if no path to macro found
     return False
 
 def attempt(state, problem, pattern_database, max_depth, max_macros):
@@ -33,7 +29,7 @@ def attempt(state, problem, pattern_database, max_depth, max_macros):
     for num_macros in range(max_macros):
 
         # Find path to next macro
-        result = path_to_macro(state, problem, pattern_database, max_depth)
+        result = macro_search(state, problem, pattern_database, max_depth)
         
         # Return failure if none found
         if result is False: return False
@@ -57,12 +53,14 @@ def attempt(state, problem, pattern_database, max_depth, max_macros):
 
 if __name__ == "__main__":
 
+    from search_tree import SearchTree
+
     import cube as problem
 
     state = problem.solved_state(3)
     problem.rotx_(state, depth=2, num_turns=1)
     pattern_database = problem.PatternDatabase()
 
-    path, macro = path_to_macro(state, problem, pattern_database, max_depth=2)
+    path, macro = macro_search(state, problem, pattern_database, max_depth=2)
     print(path)
 
