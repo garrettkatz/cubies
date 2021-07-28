@@ -179,7 +179,9 @@ if __name__ == "__main__":
 
     #### test symmetries
     domain = CubeDomain(3)
-    for s, sym_state in enumerate(domain.states_symmetric_to(domain.solved_state())):
+    state = domain.solved_state()
+    state = domain.perform((0, 0, 1), state)
+    for s, sym_state in enumerate(domain.states_symmetric_to(state)):
         ax = pt.subplot(4, 6, s+1)
         domain.render(sym_state, ax, 0, 0)
         ax.axis("equal")
