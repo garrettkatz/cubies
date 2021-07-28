@@ -85,23 +85,33 @@ class CubeDomain:
             permuted[:,:,p,(0,1)] = permuted[:,:,p,(1,0)]
             twist_permutation[2, p] = permuted.flat[face_index]
         
-        # # symmetries are also computed via face permutations
-        # def rotate(state, axis, num_twists):
-        #     for plane in range(N): state = self.perform((axis, plane, num_twists), state)
-        #     return state
-        # symmetry_permutation = np.empty((24, num_facies), dtype=int)
-        # for axis, direction in it.product((0,1,2),(0,1)):
-        #     for num_twists in range(4):
-        #         permuted = cube_index.copy()
-        #         if axis > 0: permuted = rotate(permuted, axis, 1)
-        #         if direction > 0: permuted = rotate(permuted, axis, 2)
-        #         permuted = rotate(permuted, axis, k = num_twists * direction)
+        # rotational symmetries of the full cube are also computed via state permutations
+        symmetry_permutation = np.empty((24, num_facies), dtype=int)
+
+        # helper function to rotate all planes around a given axis
+        def rotate_all_planes(state, axis, num_twists):
+            state = state.copy()
+            for twist in range(num_twists):
+                for plane in range(N):
+                    state = state[twist_permutation[axis, plane]]
+            return state
+
+        # compute symmetry permutations
+        for s, (axis, direction, num_twists) in enumerate(it.product((0,1,2),(-1,1),(0,1,2,3))):
+            # align top face with one of six directed axes
+            permuted = np.arange(num_facies)
+            if axis != 2: permuted = rotate_all_planes(permuted, 1-axis, direction % 4)
+            elif direction != 1: permuted = rotate_all_planes(permuted, 0, 2)
+            # rotate cube around directed axis
+            permuted = rotate_all_planes(permuted, axis, num_twists)
+            symmetry_permutation[s] = permuted
         
         # memoize results
         self.N = N
         self.face_index = face_index
         self._solved_state = solved_state
         self.twist_permutation = twist_permutation
+        self.symmetry_permutation = symmetry_permutation
     
     def solved_state(self):
         return self._solved_state.copy()
@@ -121,13 +131,8 @@ class CubeDomain:
     def is_solved_in(self, state):
         return (state == self._solved_state).all()
 
-    # def states_symmetric_to(self, state):
-    #     symmetries = (
-    #         (),
-    #         ((0,0,1),(0,1,1),(0,
-    #         0,1)),
-    #     )
-    #     for axis, direction in it.product((0,1,2), (-1,1)):
+    def states_symmetric_to(self, state):
+        return state[self.symmetry_permutation].copy()
 
     def render(self, state, ax, x0=0, y0=0):
         # ax is matplotlib Axes object
@@ -151,22 +156,33 @@ class CubeDomain:
 if __name__ == "__main__":
 
 
-    domain = CubeDomain(4)
-    actions = [(1, 0, 1), (0, 1, 1), (2, 2, 1), (1, 0, 1)]
-    # actions = [(0,0,1)]
-    state = domain.solved_state()
+    # #### test performing actions
+    # domain = CubeDomain(4)
+    # actions = [(1, 0, 1), (0, 1, 1), (2, 2, 1), (1, 0, 1)]
+    # # actions = [(0,0,1)]
+    # state = domain.solved_state()
 
-    ax = pt.subplot(1, len(actions)+1, 1)
-    domain.render(state, ax, 0, 0)
-    ax.axis("equal")
-    ax.axis('off')
+    # ax = pt.subplot(1, len(actions)+1, 1)
+    # domain.render(state, ax, 0, 0)
+    # ax.axis("equal")
+    # ax.axis('off')
     
-    for a, (axis, depth, num) in enumerate(actions):
-        state = domain.perform((axis, depth, num), state)
+    # for a, (axis, depth, num) in enumerate(actions):
+    #     state = domain.perform((axis, depth, num), state)
 
-        ax = pt.subplot(1, len(actions)+1, a+2)
-        domain.render(state, ax, 0, 0)
+    #     ax = pt.subplot(1, len(actions)+1, a+2)
+    #     domain.render(state, ax, 0, 0)
+    #     ax.axis("equal")
+    #     ax.axis('off')
+    
+    # pt.show()
+
+    #### test symmetries
+    domain = CubeDomain(3)
+    for s, sym_state in enumerate(domain.states_symmetric_to(domain.solved_state())):
+        ax = pt.subplot(4, 6, s+1)
+        domain.render(sym_state, ax, 0, 0)
         ax.axis("equal")
-        ax.axis('off')
-    
+        ax.axis('off')    
     pt.show()
+
