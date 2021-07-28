@@ -85,6 +85,18 @@ class CubeDomain:
             permuted[:,:,p,(0,1)] = permuted[:,:,p,(1,0)]
             twist_permutation[2, p] = permuted.flat[face_index]
         
+        # # symmetries are also computed via face permutations
+        # def rotate(state, axis, num_twists):
+        #     for plane in range(N): state = self.perform((axis, plane, num_twists), state)
+        #     return state
+        # symmetry_permutation = np.empty((24, num_facies), dtype=int)
+        # for axis, direction in it.product((0,1,2),(0,1)):
+        #     for num_twists in range(4):
+        #         permuted = cube_index.copy()
+        #         if axis > 0: permuted = rotate(permuted, axis, 1)
+        #         if direction > 0: permuted = rotate(permuted, axis, 2)
+        #         permuted = rotate(permuted, axis, k = num_twists * direction)
+        
         # memoize results
         self.N = N
         self.face_index = face_index
@@ -108,7 +120,15 @@ class CubeDomain:
 
     def is_solved_in(self, state):
         return (state == self._solved_state).all()
-    
+
+    # def states_symmetric_to(self, state):
+    #     symmetries = (
+    #         (),
+    #         ((0,0,1),(0,1,1),(0,
+    #         0,1)),
+    #     )
+    #     for axis, direction in it.product((0,1,2), (-1,1)):
+
     def render(self, state, ax, x0=0, y0=0):
         # ax is matplotlib Axes object
         # unflatten state into cube for easier indexing
