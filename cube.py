@@ -115,7 +115,7 @@ class CubeDomain:
     
     def solved_state(self):
         return self._solved_state.copy()
-    
+
     def valid_actions(self, state):
         # action format: (rotation_axis, plane_index, num_twists)
         N = self.N
@@ -128,11 +128,40 @@ class CubeDomain:
             state = state[self.twist_permutation[rotation_axis, plane_index]]
         return state
 
+    def execute(self, actions, state):
+        for action in actions: state = self.perform(action, state)
+        return state
+
     def is_solved_in(self, state):
         return (state == self._solved_state).all()
 
     def symmetries_of(self, state):
         return state[self.symmetry_permutation].copy()
+
+    def superflip_path(self):
+        # from https://www.cube20.org
+        path = "R L U2 F U' D F2 R2 B2 L U2 F' B' U R2 D F2 U R2 U"
+        action_map = {
+            "U": (1, 0, 3),
+            "D": (1, self.N-1, 1),
+            "L": (2, self.N-1, 3),
+            "R": (2, 0, 1),
+            "F": (0, 0, 1),
+            "B": (0, self.N-1, 3),
+            "U2": (1, 0, 2),
+            "D2": (1, self.N-1, 2),
+            "L2": (2, self.N-1, 2),
+            "R2": (2, 0, 2),
+            "F2": (0, 0, 2),
+            "B2": (0, self.N-1, 2),
+            "U'": (1, 0, 1),
+            "D'": (1, self.N-1, 3),
+            "L'": (2, self.N-1, 1),
+            "R'": (2, 0, 3),
+            "F'": (0, 0, 3),
+            "B'": (0, self.N-1, 1),
+        }
+        return [action_map[a] for a in path.split(" ")]
 
     def render(self, state, ax, x0=0, y0=0):
         # ax is matplotlib Axes object
@@ -152,6 +181,7 @@ class CubeDomain:
                 xy = [(x+x0, y+y0) for (x,y) in xy]
                 c = _colors[cube[tuple(np.roll((a,b,0),d))+((d+2) % 3,)]]
                 ax.add_patch(Polygon(xy, facecolor=c, edgecolor='k'))
+            ax.text((N+.1)*axes[0,d], (N+.1)*axes[1,d], str(d))
 
 if __name__ == "__main__":
 
@@ -177,14 +207,28 @@ if __name__ == "__main__":
     
     # pt.show()
 
-    #### test symmetries
-    domain = CubeDomain(3)
-    state = domain.solved_state()
-    state = domain.perform((0, 0, 1), state)
-    for s, sym_state in enumerate(domain.symmetries_of(state)):
-        ax = pt.subplot(4, 6, s+1)
-        domain.render(sym_state, ax, 0, 0)
-        ax.axis("equal")
-        ax.axis('off')    
-    pt.show()
+    # #### test symmetries
+    # domain = CubeDomain(3)
+    # state = domain.solved_state()
+    # # state = domain.perform((0, 0, 1), state)
+    # for s, sym_state in enumerate(domain.symmetries_of(state)):
+    #     ax = pt.subplot(4, 6, s+1)
+    #     domain.render(sym_state, ax, 0, 0)
+    #     ax.axis("equal")
+    #     ax.axis('off')
+    #     ax.set_title(str(s))
+    # pt.show()
 
+    #### test hardest state
+    domain = CubeDomain(3)
+    path = domain.superflip_path() # from unsolved to solved
+    inverted = [a[:2]+(-a[2] % 4,) for a in path[::-1]] # from solved to unsolved
+    hardest_state = domain.execute(inverted, domain.solved_state())
+    states = [hardest_state]
+    for action in path: states.append(domain.perform(action, states[-1]))
+    for s, state in enumerate(states):
+        ax = pt.subplot(4, 6, s+1)
+        domain.render(state, ax, 0, 0)
+        ax.axis("equal")
+        ax.axis('off')
+    pt.show()
