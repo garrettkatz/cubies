@@ -1,5 +1,5 @@
-def macro_search(state, problem, bfs_tree, pattern_database, max_depth):
-    # returns result = (actions, macro)
+def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
+    # returns result = (actions, sym_state, macro)
     # or result = False if there is no path to a macro
     
     for actions, permutation in bfs_tree:
@@ -9,13 +9,16 @@ def macro_search(state, problem, bfs_tree, pattern_database, max_depth):
 
         # Compute descendent state
         descendent = state[permutation]
-
-        # Empty macro if problem is solved in descendent state
-        if problem.is_solved_in(descendent): return actions, []
         
-        # Non-empty macro if state matches a database pattern
-        matched = pattern_database.query(descendent)
-        if matched: return actions, pattern_database.result()
+        # Consider all symmetric states
+        for sym_state in domain.symmetries_of(descendent):
+
+            # Empty macro if problem is solved in descendent state
+            if domain.is_solved_in(sym_state): return actions, sym_state, []
+
+            # Non-empty macro if state matches a database pattern
+            matched = pattern_database.query(sym_state)
+            if matched: return actions, sym_state, pattern_database.result()
 
     # Failure if no path to macro found
     return False
@@ -53,14 +56,29 @@ def attempt(state, problem, pattern_database, max_depth, max_macros):
 
 if __name__ == "__main__":
 
-    from search_tree import SearchTree
+    max_depth = 2
 
-    import cube as problem
+    from cube import CubeDomain
+    domain = CubeDomain(3)
 
-    state = problem.solved_state(3)
-    problem.rotx_(state, depth=2, num_turns=1)
-    pattern_database = problem.PatternDatabase()
+    from tree import SearchTree
+    bfs_tree = SearchTree(domain, max_depth)
 
-    path, macro = macro_search(state, problem, pattern_database, max_depth=2)
-    print(path)
+    from pattern_database import PatternDatabase
+    # patterns = domain.solved_state().reshape(1,-1)
+    # macros = [((0,0,0),)]
+    patterns = domain.perform((0,0,1), domain.solved_state()).reshape(1,-1)
+    macros = [((0,0,3),)]
+    pattern_database = PatternDatabase(patterns, macros)
+
+    state = domain.solved_state()
+    state = domain.perform((0,0,1),state)
+    state = domain.symmetries_of(state)[2,:]
+    state = domain.perform((1,0,1),state)
+    result = macro_search(state, domain, bfs_tree, pattern_database, max_depth)
+    if result != False:
+        path, sym_state, macro = result
+        print(path)
+        print(sym_state)
+        print(macro)
 
