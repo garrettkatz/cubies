@@ -21,7 +21,8 @@ class SearchTree:
                     new_actions = actions + (action,)
                     new_permutation = domain.perform(action, permutation)
 
-                    if new_permutation.tobytes() not in explored:
+                    sym_permutations = domain.symmetries_of(new_permutation)
+                    if not any([perm.tobytes() in explored for perm in sym_permutations]):
                         explored.add(new_permutation.tobytes())
                         layers[depth+1].append((new_actions, new_permutation))
         

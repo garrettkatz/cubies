@@ -131,7 +131,7 @@ class CubeDomain:
     def is_solved_in(self, state):
         return (state == self._solved_state).all()
 
-    def states_symmetric_to(self, state):
+    def symmetries_of(self, state):
         return state[self.symmetry_permutation].copy()
 
     def render(self, state, ax, x0=0, y0=0):
@@ -181,7 +181,7 @@ if __name__ == "__main__":
     domain = CubeDomain(3)
     state = domain.solved_state()
     state = domain.perform((0, 0, 1), state)
-    for s, sym_state in enumerate(domain.states_symmetric_to(state)):
+    for s, sym_state in enumerate(domain.symmetries_of(state)):
         ax = pt.subplot(4, 6, s+1)
         domain.render(sym_state, ax, 0, 0)
         ax.axis("equal")
