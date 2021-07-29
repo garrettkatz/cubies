@@ -24,33 +24,30 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
     # Failure if no path to macro found
     return False
 
-def attempt(state, problem, pattern_database, max_depth, max_macros):
-    # returns result = plan, a sequence of actions to the solved state
-    # or result = False if no plan is found
+def run(state, domain, pattern_database, max_depth, max_macros):
+    # returns plan = [...,(actions, sym index, macro),...] a sequence of macro_search results to the solved state
+    # or plan = False if no plan is found
     
     # Form plan one macro at a time
     plan = []
     for num_macros in range(max_macros):
 
-        # Find path to next macro
-        result = macro_search(state, problem, pattern_database, max_depth)
+        # Search for next macro
+        result = macro_search(state, domain, pattern_database, max_depth)
         
         # Return failure if none found
         if result is False: return False
         
-        # Otherwise, execute path and macro, one action at a time
-        path, macro = result
-        actions = path + macro
-        for action in actions:
+        # Otherwise, execute search result
+        actions, sym, macro = result
+        for action in actions: state = domain.perform(action, state)
+        state = domain.symmetries_of(state)[sym]
+        for action in macro: state = domain.perform(action, state)
+        plan.append(result)
 
-            # Update the plan with the action
-            plan.append(action)
-            
-            # Update the state after performing the action
-            state = problem.perform_(action, state)
-            
-            # Terminate as soon as the problem is solved
-            if problem.is_solved_in(state): return plan
+        # Terminate once solved
+        for sym_state in domain.symmetries_of(state):
+            if domain.is_solved_in(state): return plan
     
     # At this point, no plan was found, so return failure
     return False
