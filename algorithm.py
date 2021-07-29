@@ -1,5 +1,5 @@
 def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
-    # returns result = (actions, sym_state, macro)
+    # returns result = (actions, symmetry index, macro)
     # or result = False if there is no path to a macro
     
     for actions, permutation in bfs_tree:
@@ -11,14 +11,15 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
         descendent = state[permutation]
         
         # Consider all symmetric states
-        for sym_state in domain.symmetries_of(descendent):
+        sym_states = domain.symmetries_of(descendent)
+        for s, sym_state in enumerate(sym_states):
 
             # Empty macro if problem is solved in descendent state
-            if domain.is_solved_in(sym_state): return actions, sym_state, []
+            if domain.is_solved_in(sym_state): return actions, s, []
 
             # Non-empty macro if state matches a database pattern
             matched = pattern_database.query(sym_state)
-            if matched: return actions, sym_state, pattern_database.result()
+            if matched: return actions, s, pattern_database.result()
 
     # Failure if no path to macro found
     return False
@@ -77,8 +78,8 @@ if __name__ == "__main__":
     state = domain.perform((1,0,1),state)
     result = macro_search(state, domain, bfs_tree, pattern_database, max_depth)
     if result != False:
-        path, sym_state, macro = result
+        path, s, macro = result
         print(path)
-        print(sym_state)
+        print(s)
         print(macro)
 
