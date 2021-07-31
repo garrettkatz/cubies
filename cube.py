@@ -63,37 +63,40 @@ class CubeDomain:
         # flatten the solved cube to state representation using face_index
         solved_state = solved_cube.flat[face_index]
         
-        # quarter twists are performed by permuting indices in the state array
-        # new_state = old_state[twist_permutation[a, p]]
-        # twist_permutation[a, p] is the permuted index array for one quarter twist of plane p along axis a
+        # twists are performed by permuting indices in the state array
+        # new_state = old_state[twist_permutation[a, p, n]]
+        # twist_permutation[a, p, n] is the permuted index array for n quarter twists of plane p around axis a
+        twist_permutation = np.empty((3, N, 4, num_facies), dtype=int)
 
-        twist_permutation = np.empty((3, N, num_facies), dtype=int)
+        # compute quarter twists for each axis
         for p in range(N):
             # rotx
             permuted = cube_index.copy()
             permuted[p,:,:,:] = np.rot90(permuted[p,:,:,:], axes=(0,1)) # rotate cubie positions
             permuted[p,:,:,(1,2)] = permuted[p,:,:,(2,1)] # rotate cubies
-            twist_permutation[0, p] = permuted.flat[face_index]
+            twist_permutation[0, p, 1] = permuted.flat[face_index]
             # roty
             permuted = cube_index.copy()
             permuted[:,p,:,:] = np.rot90(permuted[:,p,:,:], axes=(0,1))
             permuted[:,p,:,(2,0)] = permuted[:,p,:,(0,2)]
-            twist_permutation[1, p] = permuted.flat[face_index]
+            twist_permutation[1, p, 1] = permuted.flat[face_index]
             # rotz
             permuted = cube_index.copy()
             permuted[:,:,p,:] = np.rot90(permuted[:,:,p,:], axes=(0,1))
             permuted[:,:,p,(0,1)] = permuted[:,:,p,(1,0)]
-            twist_permutation[2, p] = permuted.flat[face_index]
-        
+            twist_permutation[2, p, 1] = permuted.flat[face_index]
+        # compute non-quarter twists
+        for a, p, n in it.product((0,1,2), range(N), (2, 3, 4)):
+            twist_permutation[a, p, n % 4] = twist_permutation[a, p, n-1][twist_permutation[a, p, 1]]
+
         # rotational symmetries of the full cube are also computed via state permutations
         symmetry_permutation = np.empty((24, num_facies), dtype=int)
 
         # helper function to rotate all planes around a given axis
         def rotate_all_planes(state, axis, num_twists):
             state = state.copy()
-            for twist in range(num_twists):
-                for plane in range(N):
-                    state = state[twist_permutation[axis, plane]]
+            for plane in range(N):
+                state = state[twist_permutation[axis, plane, num_twists]]
             return state
 
         # compute symmetry permutations
@@ -105,28 +108,29 @@ class CubeDomain:
             # rotate cube around directed axis
             permuted = rotate_all_planes(permuted, axis, num_twists)
             symmetry_permutation[s] = permuted
-        
+
+        # precompute valid action list
+        # action format: (rotation_axis, plane_index, num_twists)
+        valid_actions = tuple(it.product((0,1,2), range(N), (1,2,3)))
+
         # memoize results
         self.N = N
-        self.face_index = face_index
+        self._face_index = face_index
         self._solved_state = solved_state
-        self.twist_permutation = twist_permutation
-        self.symmetry_permutation = symmetry_permutation
+        self._twist_permutation = twist_permutation
+        self._symmetry_permutation = symmetry_permutation
+        self._valid_actions = valid_actions
     
     def solved_state(self):
         return self._solved_state.copy()
 
     def valid_actions(self, state):
         # action format: (rotation_axis, plane_index, num_twists)
-        N = self.N
-        return it.product((0,1,2), range(N), (1,2,3))
+        return self._valid_actions
 
     def perform(self, action, state):
-        rotation_axis, plane_index, num_twists = action
-        state = state.copy()
-        for k in range(num_twists):
-            state = state[self.twist_permutation[rotation_axis, plane_index]]
-        return state
+        axis, plane, num_twists = action
+        return state[self._twist_permutation[axis, plane, num_twists]].copy()
 
     def execute(self, actions, state):
         for action in actions: state = self.perform(action, state)
@@ -136,7 +140,7 @@ class CubeDomain:
         return (state == self._solved_state).all()
 
     def symmetries_of(self, state):
-        return state[self.symmetry_permutation].copy()
+        return state[self._symmetry_permutation].copy()
 
     def superflip_path(self):
         # from https://www.cube20.org
@@ -163,12 +167,19 @@ class CubeDomain:
         }
         return [action_map[a] for a in path.split(" ")]
 
+    def random_state(self, scramble_length, rng):
+        state = self.solved_state()
+        valid_actions = tuple(self.valid_actions(state))
+        for s in range(scramble_length):
+            state = self.perform(rng.choice(valid_actions), state)
+        return state
+
     def render(self, state, ax, x0=0, y0=0):
         # ax is matplotlib Axes object
         # unflatten state into cube for easier indexing
         N = self.N
         cube = np.empty((N,N,N,3), dtype=int)
-        cube.flat[self.face_index] = state
+        cube.flat[self._face_index] = state
         # render orthogonal projection
         angles = -np.arange(3) * np.pi * 2 / 3
         axes = np.array([np.cos(angles), np.sin(angles)])
