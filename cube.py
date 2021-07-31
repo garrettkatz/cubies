@@ -96,14 +96,14 @@ class CubeDomain:
         def rotate_all_planes(state, axis, num_twists):
             state = state.copy()
             for plane in range(N):
-                state = state[twist_permutation[axis, plane, num_twists]]
+                state = state[twist_permutation[axis, plane, num_twists % 4]]
             return state
 
         # compute symmetry permutations
         for s, (axis, direction, num_twists) in enumerate(it.product((0,1,2),(-1,1),(0,1,2,3))):
             # align top face with one of six directed axes
             permuted = np.arange(num_facies)
-            if axis != 2: permuted = rotate_all_planes(permuted, 1-axis, direction % 4)
+            if axis != 2: permuted = rotate_all_planes(permuted, 1-axis, direction)
             elif direction != 1: permuted = rotate_all_planes(permuted, 0, 2)
             # rotate cube around directed axis
             permuted = rotate_all_planes(permuted, axis, num_twists)
@@ -130,7 +130,7 @@ class CubeDomain:
 
     def perform(self, action, state):
         axis, plane, num_twists = action
-        return state[self._twist_permutation[axis, plane, num_twists]].copy()
+        return state[self._twist_permutation[axis, plane, num_twists % 4]].copy()
 
     def execute(self, actions, state):
         for action in actions: state = self.perform(action, state)

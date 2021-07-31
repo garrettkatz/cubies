@@ -11,32 +11,52 @@ class PatternDatabase:
         self.match_index = 0
         self.matched = False
 
+        # bindings[i,v] is value bound to variable v in pattern i
+        self.bindings = np.tile(np.arange(patterns.max()+1), (patterns.shape[0], 1))
+
     def query(self, state):
 
-        # copy patterns for variable binding
+        # copy initial patterns and bindings for in-place variable grounding
         patterns = self.patterns.copy()
+        bindings = self.bindings.copy()
 
-        # initialize mask for successful unifications
-        unified = np.ones(self.patterns.shape[0], dtype=bool)
+        # initialize index of leading patterns that unify with state (will be pruned)
+        unified = np.arange(self.patterns.shape[0])
 
-        # unify state with patterns
-        for k in range(state.size):
+        # iterate over state values to progressively bind pattern variables and unify
+        for k in range(patterns.shape[1]):
 
-            # select unbound variables in unified leading patterns
-            unbound = unified & (patterns[:,k] > 6)
-            if unbound.any():
-                patterns[unbound,k:] = np.where(patterns[unbound,k:] == patterns[unbound,k:k+1], state[k], patterns[unbound,k:])
+            # collect indices of leading patterns that still unify with state and have variables at entry k
+            var_index = unified[patterns[unified,k] > 6] # variables are numbers > 6
+            if var_index.size > 0:
 
-            # updated mask of patterns that still unify with state
-            unified &= (patterns[:,k] == state[k]) | (patterns[:,k] == 0)
-        
-        self.match_index = unified.argmax() # what about multiple matches?
-        self.matched = (unified[self.match_index] != False)
+                # substitute values for variables that were already bound in a previous iteration
+                patterns[var_index, k:k+1] = np.take_along_axis(bindings[var_index,:], patterns[var_index, k:k+1], axis=1)
+
+                # collect remaining indices of patterns that still have  unbound variables at entry k
+                var_index = var_index[patterns[var_index,k] > 6]
+
+            # bind and ground remaining variables to value in state at entry k
+            if var_index.size > 0:
+
+                # update bindings
+                np.put_along_axis(bindings[var_index,:], patterns[var_index, k:k+1], state[k], axis=1)
+
+                # ground patterns
+                patterns[var_index, k] = state[k]
+
+            # discard any patterns that no longer unify (0 unifies with everything)
+            unified = unified[(patterns[unified,k] == state[k]) | (patterns[unified,k] == 0)]
+            if unified.size == 0: break #  if no patterns unify anymore, stop early
+
+        # cache query result
+        self.match_index = unified # what about multiple matches?
+        self.matched = unified.size > 0
 
         return self.matched
 
     def result(self): # assumes match was not False
-        return list(self.macros[self.match_index])
+        return list(self.macros[self.match_index[0]])
 
 if __name__ == "__main__":
 
@@ -78,12 +98,22 @@ if __name__ == "__main__":
     for state in states:
 
         matched = pattern_database.query(state)
-        print()
         print(state)
         print(matched)
         if matched:
-            print(pattern_database.patterns[pattern_database.match_index])
+            print(pattern_database.patterns[pattern_database.match_index[0]])
             print(pattern_database.result())
+
+    print()
+    assert pattern_database.query(states[0])
+    assert pattern_database.result() == [1]
+    assert pattern_database.query(states[1])
+    assert pattern_database.result() == [2]
+    assert pattern_database.query(states[2])
+    assert pattern_database.result() == [2]
+    assert pattern_database.query(states[3])
+    assert pattern_database.result() == [4]
+    assert pattern_database.query(states[4]) == False
 
 
 
