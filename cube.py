@@ -109,6 +109,16 @@ class CubeDomain:
             permuted = rotate_all_planes(permuted, axis, num_twists)
             symmetry_permutation[s] = permuted
 
+        # physically possible permutations of the colors correspond to full cube symmetries
+        color_permutation = np.zeros((24, 7), dtype=int) # 7 since color enum starts at 1
+        
+        # get one index in solved state for each color
+        color_index = np.array([(solved_state == c).argmax() for c in range(1,7)])
+        
+        # extract color permutation from each symmetry permutation
+        for sym in range(24):
+            color_permutation[sym,1:] = solved_state[symmetry_permutation[sym]][color_index]
+
         # precompute valid action list
         # action format: (rotation_axis, plane_index, num_twists)
         valid_actions = tuple(it.product((0,1,2), range(N), (1,2,3)))
@@ -119,6 +129,7 @@ class CubeDomain:
         self._solved_state = solved_state
         self._twist_permutation = twist_permutation
         self._symmetry_permutation = symmetry_permutation
+        self._color_permutation = color_permutation
         self._valid_actions = valid_actions
     
     def solved_state(self):
@@ -141,6 +152,9 @@ class CubeDomain:
 
     def symmetries_of(self, state):
         return state[self._symmetry_permutation].copy()
+
+    def color_permutations_of(self, state):
+        return self._color_permutation.take(state, axis=1)
 
     def superflip_path(self):
         # from https://www.cube20.org
@@ -230,16 +244,31 @@ if __name__ == "__main__":
     #     ax.set_title(str(s))
     # pt.show()
 
-    #### test hardest state
-    domain = CubeDomain(3)
-    path = domain.superflip_path() # from unsolved to solved
-    inverted = [a[:2]+(-a[2] % 4,) for a in path[::-1]] # from solved to unsolved
-    hardest_state = domain.execute(inverted, domain.solved_state())
-    states = [hardest_state]
-    for action in path: states.append(domain.perform(action, states[-1]))
-    for s, state in enumerate(states):
+    #### test color permutations
+    domain = CubeDomain(2)
+    print(domain._color_permutation)
+    state = domain.solved_state()
+    # state = domain.perform((0, 0, 1), state)
+    for s, sym_state in enumerate(domain.color_permutations_of(state)):
+    # for s in range(24):
+    #     sym_state = domain._color_permutation[s][state]
         ax = pt.subplot(4, 6, s+1)
-        domain.render(state, ax, 0, 0)
+        domain.render(sym_state, ax, 0, 0)
         ax.axis("equal")
         ax.axis('off')
+        ax.set_title(str(s))
     pt.show()
+
+    # #### test hardest state
+    # domain = CubeDomain(3)
+    # path = domain.superflip_path() # from unsolved to solved
+    # inverted = [a[:2]+(-a[2] % 4,) for a in path[::-1]] # from solved to unsolved
+    # hardest_state = domain.execute(inverted, domain.solved_state())
+    # states = [hardest_state]
+    # for action in path: states.append(domain.perform(action, states[-1]))
+    # for s, state in enumerate(states):
+    #     ax = pt.subplot(4, 6, s+1)
+    #     domain.render(state, ax, 0, 0)
+    #     ax.axis("equal")
+    #     ax.axis('off')
+    # pt.show()
