@@ -27,7 +27,7 @@ if __name__ == "__main__":
     solved = domain.solved_state()
     valid_actions = list(domain.valid_actions(solved))
     probs = np.ones(7)
-    probs[0] = 100
+    probs[0] = 10
     probs /= probs.sum()
     patterns = rng.choice(np.arange(7), size = (num_initial_patterns, solved.size), p = probs)
     macros = [

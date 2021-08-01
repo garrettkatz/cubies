@@ -10,16 +10,10 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
         # Compute descendent state
         descendent = state[permutation]
         
-        # Consider all symmetric states for problem solution
-        sym_states = domain.symmetries_of(descendent)
-        for s, sym_state in enumerate(sym_states):
-
-            # Empty macro if problem is solved in descendent state
-            if domain.is_solved_in(sym_state): return actions, s, []
-
-            # # Non-empty macro if state matches a database pattern
-            # matched = pattern_database.query(sym_state)
-            # if matched: return actions, s, pattern_database.result()
+        # Empty macro if problem is solved in descendent state
+        if domain.is_solved_in(descendent):
+            sym = (domain.symmetries_of(descendent) == domain.solved_state()).all(axis=1).argmax()
+            return actions, sym, []
 
         # Non-empty macro if state matches a database pattern
         matched = pattern_database.query(descendent)
@@ -50,8 +44,7 @@ def run(state, domain, bfs_tree, pattern_database, max_depth, max_macros):
         plan.append(result)
 
         # Terminate once solved
-        for sym_state in domain.symmetries_of(state):
-            if domain.is_solved_in(state): return plan
+        if domain.is_solved_in(state): return plan
     
     # At this point, no plan was found, so return failure
     return False
