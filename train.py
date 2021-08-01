@@ -3,16 +3,17 @@ from objectives import evaluate
 if __name__ == "__main__":
     
     cube_size = 3
-    max_scrambles = 5
-    num_instances = 32
+    max_scrambles = 20
+    num_instances = 64
     tree_depth = 3
     max_depth = 1
     max_macros = 2
     num_patterns = 32
     unnormalized_wildcard_weight = 2
     population_size = 64
-    num_generations = 64
+    num_generations = 512
     dotrain = True
+    showresults = False
 
     from cube import CubeDomain
     domain = CubeDomain(cube_size)
@@ -76,14 +77,16 @@ if __name__ == "__main__":
                 best_macros = all_macros[gen][best]
             print("gen %d: best godly solves = %d" % (gen, best_solves))
 
-    with open("data.pkl", "rb") as f: (patterns, macros, godly_solves) = pk.load(f)
-    
-    import matplotlib.pyplot as pt
-    pt.subplot(1,2,1)
-    pt.hist(godly_solves[0].values())
-    pt.hist(godly_solves[len(godly_solves)-1].values())
-    pt.subplot(1,2,2)
-    pt.plot([max(godly_solves[gen].values()) for gen in range(len(godly_solves))])
-    pt.show()
+    if showresults:
+
+        with open("data.pkl", "rb") as f: (patterns, macros, godly_solves) = pk.load(f)
+        
+        import matplotlib.pyplot as pt
+        pt.subplot(1,2,1)
+        pt.hist(godly_solves[0].values())
+        pt.hist(godly_solves[len(godly_solves)-1].values())
+        pt.subplot(1,2,2)
+        pt.plot([max(godly_solves[gen].values()) for gen in range(len(godly_solves))])
+        pt.show()
 
 
