@@ -10,16 +10,20 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
         # Compute descendent state
         descendent = state[permutation]
         
-        # Consider all symmetric states
+        # Consider all symmetric states for problem solution
         sym_states = domain.symmetries_of(descendent)
         for s, sym_state in enumerate(sym_states):
 
             # Empty macro if problem is solved in descendent state
             if domain.is_solved_in(sym_state): return actions, s, []
 
-            # Non-empty macro if state matches a database pattern
-            matched = pattern_database.query(sym_state)
-            if matched: return actions, s, pattern_database.result()
+            # # Non-empty macro if state matches a database pattern
+            # matched = pattern_database.query(sym_state)
+            # if matched: return actions, s, pattern_database.result()
+
+        # Non-empty macro if state matches a database pattern
+        matched = pattern_database.query(descendent)
+        if matched: return (actions,) + pattern_database.result()
 
     # Failure if no path to macro found
     return False
@@ -101,9 +105,18 @@ if __name__ == "__main__":
         [(1,0,3),(0,0,3)],
         [(0,0,3),(1,0,3),(2,0,3)],
     )
-    pattern_database = PatternDatabase(patterns, macros)
+    pattern_database = PatternDatabase(patterns, macros, domain)
 
-    state = domain.perform((1,0,1), patterns[1])
+    matched = pattern_database.query(domain.symmetries_of(patterns[1])[15])
+    print(matched)
+    if matched:
+        sym, macro = pattern_database.result()
+        print(sym, macro)
+
+    # state = domain.perform((1,0,1), patterns[1])
+    state = domain.perform((1,0,1), domain.symmetries_of(patterns[1])[21])
+    # state = domain.symmetries_of(patterns[1])[15]
+    # state = patterns[1]
     result = run(state, domain, bfs_tree, pattern_database, max_depth=1, max_macros=2)
     if result != False:
 
@@ -117,6 +130,7 @@ if __name__ == "__main__":
 
         i = 1
         draw(state, "initial", i)
+        i += 1
         for (actions, sym, macro) in result:
             print(actions)
             print(sym)

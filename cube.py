@@ -109,6 +109,12 @@ class CubeDomain:
             permuted = rotate_all_planes(permuted, axis, num_twists)
             symmetry_permutation[s] = permuted
 
+        # determine symmetry inverses
+        inverse_symmetry = {}
+        for s, s_inv in it.product(range(24), repeat=2):
+            if (symmetry_permutation[s_inv][symmetry_permutation[s]] == np.arange(num_facies)).all():
+                inverse_symmetry[s] = s_inv
+
         # physically possible permutations of the colors correspond to full cube symmetries
         color_permutation = np.zeros((24, 7), dtype=int) # 7 since color enum starts at 1
         
@@ -129,9 +135,13 @@ class CubeDomain:
         self._solved_state = solved_state
         self._twist_permutation = twist_permutation
         self._symmetry_permutation = symmetry_permutation
+        self._inverse_symmetry = inverse_symmetry
         self._color_permutation = color_permutation
         self._valid_actions = valid_actions
     
+    def state_size(self):
+        return self._solved_state.size
+
     def solved_state(self):
         return self._solved_state.copy()
 
@@ -152,6 +162,9 @@ class CubeDomain:
 
     def symmetries_of(self, state):
         return state[self._symmetry_permutation].copy()
+
+    def inverse_symmetry_of(self, s):
+        return self._inverse_symmetry[s]
 
     def color_permutations_of(self, state):
         return self._color_permutation.take(state, axis=1)
