@@ -23,10 +23,10 @@ def evaluate(domain, bfs_tree, pattern_database, rng, num_instances, max_scrambl
             for (actions, sym, macro) in result[i]: plan_length[i] += len(actions) + len(macro)
 
     # smaller number of patterns
-    pattern_size = pattern_database.patterns.shape[0] // 24
+    pattern_size = -pattern_database.patterns.shape[0] // 24
 
     # smaller macro lengths
-    macro_size = sum(map(len, pattern_database.macros)) / 24
+    macro_size = -sum(map(len, pattern_database.macros)) // 24
 
     # TODO: less complex patterns (like colors grouped together/symmetric, more zeros, fewer variables)
 

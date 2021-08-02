@@ -149,7 +149,7 @@ class CubeDomain:
     def solved_state(self):
         return self._solved_state.copy()
 
-    def valid_actions(self, state):
+    def valid_actions(self, state=None):
         # action format: (rotation_axis, plane_index, num_twists)
         return self._valid_actions
 
