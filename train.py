@@ -38,7 +38,8 @@ def optimize(num_generations, num_candidates, spawn, mutate, evaluate, dump_file
         for c in range(num_candidates):
             new_candidate = spawn() if g == 0 else mutate(candidate[g-1][c])
             new_objectives = evaluate(new_candidate)
-            if g == 0 or (new_objectives > objectives[g-1][c]).any():
+            # if g == 0 or (new_objectives > objectives[g-1][c]).any():
+            if g == 0 or (new_objectives[2] > objectives[g-1][c][2]).any():
                 candidate[g][c] = new_candidate
                 objectives[g][c] = new_objectives
             else:
@@ -74,6 +75,8 @@ if __name__ == "__main__":
     mutation_rate = .25
     num_generations = 512
     num_candidates = 64
+    # num_generations = 3
+    # num_candidates = 3
     dump_file = "data.pkl"
 
     from cube import CubeDomain
@@ -120,11 +123,27 @@ if __name__ == "__main__":
         
         import matplotlib.pyplot as pt
 
-        for g in range(len(objectives)):
-            gen_objectives = np.array(list(objectives[g].values()))
-            macro_sizes, godly_solves = gen_objectives[:,1:].T
-            color = (1 - (g+1) / len(objectives),)*3
-            pt.scatter(macro_sizes, godly_solves, color=color)
+        num_generations = len(objectives)
+        num_candidates = len(objectives[0])
+        num_finished = sum([len(objectives[g]) > 0 for g in range(num_generations)])
+        objectives = np.array([[objectives[g][c] for c in range(num_candidates)] for g in range(num_finished)]).astype(float)
+        
+        for c in range(min(1,num_candidates)):
+            macro_sizes, godly_solves = objectives[:,c,1:].T
+            for g in range(num_finished-1):
+                color = (1 - (g+1) / num_finished,)*3
+                assert (macro_sizes[g+1] >= macro_sizes[g]) or (godly_solves[g+1] >= godly_solves[g])
+                pt.plot(macro_sizes[g:g+2], godly_solves[g:g+2], color=color, linestyle="-")
+            # color = [(1 - (g+1) / num_finished,)*3 for g in range(num_finished)]
+            # pt.scatter(macro_sizes, godly_solves, color=color)
+
+        # for g in range(num_finished):
+        #     gen_objectives = objectives[g]
+        #     gen_objectives += (rng.random(gen_objectives.shape) - 0.5)
+        #     macro_sizes, godly_solves = gen_objectives[:,1:].T
+        #     color = (1 - (g+1) / num_finished,)*3
+        #     pt.scatter(macro_sizes, godly_solves, color=color)
+
         pt.xlabel("-macro size")
         pt.ylabel("\# godly solves")
         pt.show()
