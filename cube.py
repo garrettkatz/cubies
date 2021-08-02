@@ -173,6 +173,9 @@ class CubeDomain:
     def color_permutations_of(self, state):
         return self._color_permutation.take(state, axis=1)
 
+    def reverse(self, actions):
+        return [(axis, plane, -twists % 4) for (axis, plane, twists) in reversed(actions)]
+
     def superflip_path(self):
         # from https://www.cube20.org
         path = "R L U2 F U' D F2 R2 B2 L U2 F' B' U R2 D F2 U R2 U"
@@ -279,8 +282,8 @@ if __name__ == "__main__":
     #### test hardest state
     domain = CubeDomain(3)
     path = domain.superflip_path() # from unsolved to solved
-    inverted = [a[:2]+(-a[2] % 4,) for a in path[::-1]] # from solved to unsolved
-    hardest_state = domain.execute(inverted, domain.solved_state())
+    # inverted = [a[:2]+(-a[2] % 4,) for a in path[::-1]] # from solved to unsolved
+    hardest_state = domain.execute(domain.reverse(path), domain.solved_state())
     states = [hardest_state]
     for action in path: states.append(domain.perform(action, states[-1]))
     assert domain.is_solved_in(states[-1])
