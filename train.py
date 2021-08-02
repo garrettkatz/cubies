@@ -28,38 +28,39 @@ def mutate(patterns, macros, rng, mutation_rate, sample_macro):
             patterns[p], macros[p] = sample_macro()
     return patterns, macros
 
-def optimize(num_generations, num_candidates, spawn, mutate, evaluate, dump_file):
-    # initialize populations
-    candidate = {g: {} for g in range(num_generations)}
-    objectives = {g: {} for g in range(num_generations)}
+def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_file):
 
-    # optimize
-    for g in range(num_generations):
-        for c in range(num_candidates):
-            new_candidate = spawn() if g == 0 else mutate(candidate[g-1][c])
-            new_objectives = evaluate(new_candidate)
-            # if g == 0 or (new_objectives > objectives[g-1][c]).any():
-            if g == 0 or (new_objectives[2] > objectives[g-1][c][2]).any():
-                candidate[g][c] = new_candidate
-                objectives[g][c] = new_objectives
-            else:
-                candidate[g][c] = candidate[g-1][c]
-                objectives[g][c] = objectives[g-1][c]
-            pattern_size, macro_size, godly_solves = objectives[g][c]
-            print("  g,c = %d,%d: %d size, %d godly" % (g,c, macro_size, godly_solves))
+    objective = np.empty((num_candidates, len(obj_names)))
+    candidate = {0: spawn()}
+    objective[0] = evaluate(candidate[0])
+    frontier = np.array([0])
 
-        with open(dump_file, "wb") as df: pk.dump((candidate, objectives), df)
+    for c in range(1, num_candidates):
 
-        gen_objectives = np.array(list(objectives[g].values()))
-        best_size, best_godly = gen_objectives[:,1:].max(axis=0)
-        print("Gen %d: best size, godly = %d, %d" % (g, best_size, best_godly))
+        candidate[c] = mutate(candidate[rng.choice(frontier)])
+        objective[c] = evaluate(candidate[c])
 
-    return candidate, objectives
+        # comparison = (objective[frontier] > objective[c])
+        # dominators = comparison.all(axis=1)
+        # remainders = comparison.any(axis=1)
+        dominators = (objective[frontier] > objective[c]).all(axis=1)
+        remainders = (objective[frontier] >= objective[c]).any(axis=1)
+
+        if not dominators.any(): frontier = np.append(frontier[remainders], [c])
+
+        bests = ["%s: %s" % (obj_names[i], objective[:c+1, i].max()) for i in range(objective.shape[1])]
+        print("%d  |  %d pioneers  |  bests: %s" % (c, frontier.size, ", ".join(bests)))
+        
+        with open(dump_file, "wb") as df: pk.dump((candidate, objective, frontier), df)
+    
+    return candidate, objective, frontier
 
 if __name__ == "__main__":
     
     dotrain = True
-    showresults = True
+    showresults = False
+    # dotrain = False
+    # showresults = True
 
     cube_size = 3
     max_scrambles = 20
@@ -73,10 +74,9 @@ if __name__ == "__main__":
     wildcard_rate = .5
     rollout_length = 20
     mutation_rate = .25
-    num_generations = 512
-    num_candidates = 64
-    # num_generations = 3
-    # num_candidates = 3
+    num_candidates = 2**16
+    # num_candidates = 2**12
+    obj_names = ["num patterns", "macro size", "godly solves"]
     dump_file = "data.pkl"
 
     from cube import CubeDomain
@@ -106,45 +106,42 @@ if __name__ == "__main__":
     # print(objectives)
     
     if dotrain:
+
         # candidate = (patterns, macros)
-        result = optimize(
-            num_generations,
+        pareto_search(
             num_candidates,
+            rng,
             spawn = lambda: spawn(num_patterns, sample_macro_fun),
             mutate = lambda candidate: mutate(candidate[0], candidate[1], rng, mutation_rate, sample_macro_fun),
             evaluate = lambda candidate: np.array(evaluate(
-                domain, bfs_tree, PatternDatabase(candidate[0], candidate[1], domain), rng, num_instances, max_scrambles, max_depth, max_macros)),
-            dump_file = dump_file
+                domain, bfs_tree, PatternDatabase(candidate[0], candidate[1], domain), rng, num_instances, max_scrambles, max_depth, max_macros)[1:]),
+            obj_names = obj_names[1:],
+            dump_file = dump_file,
         )
 
     if showresults:
 
-        with open(dump_file, "rb") as f: (candidate, objectives) = pk.load(f)
+        with open(dump_file, "rb") as f: (candidate, objectives, frontier) = pk.load(f)
         
         import matplotlib.pyplot as pt
 
-        num_generations = len(objectives)
-        num_candidates = len(objectives[0])
-        num_finished = sum([len(objectives[g]) > 0 for g in range(num_generations)])
-        objectives = np.array([[objectives[g][c] for c in range(num_candidates)] for g in range(num_finished)]).astype(float)
-        
-        for c in range(min(1,num_candidates)):
-            macro_sizes, godly_solves = objectives[:,c,1:].T
-            for g in range(num_finished-1):
-                color = (1 - (g+1) / num_finished,)*3
-                assert (macro_sizes[g+1] >= macro_sizes[g]) or (godly_solves[g+1] >= godly_solves[g])
-                pt.plot(macro_sizes[g:g+2], godly_solves[g:g+2], color=color, linestyle="-")
-            # color = [(1 - (g+1) / num_finished,)*3 for g in range(num_finished)]
-            # pt.scatter(macro_sizes, godly_solves, color=color)
+        C = len(candidate)
+        objectives = objectives[:C]
+        color = np.tile(np.linspace(1, .5, C), (3,1)).T
+        color[frontier,:] = 0
+        # # color = np.ones((C, 3))
+        # # color[:,0] = np.linspace(0, .5, C)
+        # # color[frontier,2] = color[frontier, 0]
+        # # color[frontier,0] = 1
+        # color = np.zeros((C, 3))
+        # color[:,0] = 1
+        # color[frontier,2] = color[frontier, 0]
+        # color[frontier,0] = 0
+        rando = objectives + 0.25*(rng.random(objectives.shape) - .5)
+        pt.scatter(*rando.T, color=color)
+        # pt.scatter(*rando[frontier].T, color=color[frontier])
 
-        # for g in range(num_finished):
-        #     gen_objectives = objectives[g]
-        #     gen_objectives += (rng.random(gen_objectives.shape) - 0.5)
-        #     macro_sizes, godly_solves = gen_objectives[:,1:].T
-        #     color = (1 - (g+1) / num_finished,)*3
-        #     pt.scatter(macro_sizes, godly_solves, color=color)
-
-        pt.xlabel("-macro size")
-        pt.ylabel("\# godly solves")
+        pt.xlabel("- macro size")
+        pt.ylabel("# godly solves")
         pt.show()
 
