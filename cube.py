@@ -143,6 +143,9 @@ class CubeDomain:
         self._color_permutation = color_permutation
         self._valid_actions = valid_actions
     
+    def god_number(self):
+        return 11 if self.N == 2 else 20
+
     def state_size(self):
         return self._solved_state.size
 

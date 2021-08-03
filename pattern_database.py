@@ -10,10 +10,6 @@ class PatternDatabase:
         self.match_index = 0
         self.matched = False
 
-        # save originals
-        self.orig_patterns = patterns
-        self.orig_macros = macros
-
         # expand db with rotational symmetries
         self.patterns = np.empty((24*len(patterns), domain.state_size()), dtype=int)
         self.syms = []
