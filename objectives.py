@@ -33,7 +33,8 @@ def evaluate(domain, bfs_tree, pattern_database, rng, num_instances, max_scrambl
     # solve in <= min 20, scramble_length steps
     godly_solves = sum(int((result[i] != False) and (plan_length[i] <= min(20, scramble_length[i]))) for i in range(num_instances))
 
-    return pattern_size, macro_size, godly_solves
+    objectives = (pattern_size, macro_size, godly_solves)
+    return pattern_database, objectives
 
 if __name__ == "__main__":
     

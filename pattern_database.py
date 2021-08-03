@@ -10,6 +10,10 @@ class PatternDatabase:
         self.match_index = 0
         self.matched = False
 
+        # save originals
+        self.orig_patterns = patterns
+        self.orig_macros = macros
+
         # expand db with rotational symmetries
         self.patterns = np.empty((24*len(patterns), domain.state_size()), dtype=int)
         self.syms = []
@@ -20,10 +24,16 @@ class PatternDatabase:
                 self.syms.append(domain.inverse_symmetry_of(s))
                 self.macros.append(macros[p])
 
+        # trace query history
+        self.match_counts = np.zeros(len(patterns), dtype=int) # aggregates across symmetry
+        self.hit_counts = np.zeros(self.patterns.shape, dtype=int)
+        self.num_queries = 0
+
     def query(self, state):
 
         # brute query
-        self.match_index = np.flatnonzero(((self.patterns == state) | (self.patterns == 0)).all(axis=1))
+        hits = (self.patterns == state) | (self.patterns == 0)
+        self.match_index = np.flatnonzero(hits.all(axis=1))
 
         # # progressive query
         # matches = np.arange(self.patterns.shape[0])
@@ -31,6 +41,12 @@ class PatternDatabase:
         #     matches = matches[(self.patterns[matches, k] == state[k]) | (self.patterns[matches, k] == 0)]
         # self.match_index = matches
 
+        # update trace
+        self.match_counts[self.match_index // 24] += 1
+        self.hit_counts += hits
+        self.num_queries += 1
+
+        # return status
         self.matched = self.match_index.size > 0
         return self.matched
 
