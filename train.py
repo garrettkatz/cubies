@@ -43,7 +43,7 @@ if __name__ == "__main__":
     # showresults = True
     # postmortem = False
 
-    cube_size = 3
+    cube_size = 2
     num_instances = 64
     tree_depth = 3
     max_depth = 1
