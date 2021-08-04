@@ -6,6 +6,8 @@ class Candidate:
     def __init__(self, patterns, macros):
         self.patterns = patterns
         self.macros = macros
+        self.good_match_counts = None
+        self.fail_match_counts = None
         self.match_counts = None
 
 class CandidateSet:
@@ -44,21 +46,40 @@ class CandidateSet:
 
     def evaluate(self, candidate):
 
+        # initialize traces
+        candidate.good_match_counts = np.zeros(len(candidate.patterns), dtype=int)
+        candidate.fail_match_counts = np.zeros(len(candidate.patterns), dtype=int)
+        candidate.match_counts = np.zeros(len(candidate.patterns), dtype=int)
+
         ### Run candidate on problem instances
         pattern_database = PatternDatabase(candidate.patterns, candidate.macros, self.domain)
         result = {}
         scramble_length = {}
         plan_length = {}
+
         for i in range(self.num_instances):
+
+            # Run algorithm on instance
             scramble_length[i] = self.rng.integers(1, self.rollout_length, endpoint=True)
             state = self.domain.random_state(scramble_length[i], self.rng)
             result[i] = run(state, self.domain, self.bfs_tree, pattern_database, self.max_depth, self.max_macros)
-            
-            if result[i] != False:
+            success = (result[i] != False)
+
+            # Record plan length
+            if success:
                 plan_length[i] = 0
                 for (actions, sym, macro) in result[i]: plan_length[i] += len(actions) + len(macro)
 
+            # Update traces
+            if success:
+                candidate.good_match_counts += pattern_database.match_counts
+            else:
+                candidate.fail_match_counts += pattern_database.match_counts
+            pattern_database.reset()
     
+        # Overall match counts
+        candidate.match_counts = candidate.good_match_counts + candidate.fail_match_counts
+
         ### Evaluate objective functions
         # solve in <= 20 steps
         # solve in <= rollout_length steps
@@ -73,9 +94,6 @@ class CandidateSet:
             for i in range(self.num_instances))
     
         objectives = (pattern_size, macro_size, godly_solves)
-        
-        ### update candidate with metrics
-        candidate.match_counts = pattern_database.match_counts
 
         return candidate, objectives
 

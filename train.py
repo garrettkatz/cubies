@@ -7,6 +7,7 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
 
     candidate[0], objective[0] = evaluate(spawn())
     frontier = np.array([0])
+    pioneer = dict(candidate) # candidates that were ever in a frontier
 
     for c in range(1, num_candidates):
 
@@ -15,13 +16,16 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
         dominators = (objective[frontier] > objective[c]).all(axis=1)
         remainders = (objective[frontier] >= objective[c]).any(axis=1)
 
-        if not dominators.any(): frontier = np.append(frontier[remainders], [c])
+        if not dominators.any():
+            frontier = np.append(frontier[remainders], [c])
+            pioneer[c] = candidate[c]
 
         bests = ["%s: %s" % (obj_names[i], objective[:c+1, i].max()) for i in range(objective.shape[1])]
-        print("%d  |  %d pioneers  |  bests: %s" % (c, frontier.size, ", ".join(bests)))
+        print("%d  |  %d in frontier  |  bests: %s" % (c, frontier.size, ", ".join(bests)))
         
         if not dominators.any():
-            with open(dump_file, "wb") as df: pk.dump((candidate, objective, frontier), df)
+            with open(dump_file, "wb") as df: pk.dump((pioneer, objective, frontier), df)
+            # with open(dump_file, "wb") as df: pk.dump((candidate, objective, frontier), df)
     
     return candidate, objective, frontier
 
@@ -53,8 +57,8 @@ if __name__ == "__main__":
     max_macro_size = 5
     wildcard_rate = .5
     rollout_length = 20
-    num_candidates = 2**16
-    # num_candidates = 256
+    # num_candidates = 2**16
+    num_candidates = 64
     obj_names = ["macro size", "godly solves"]
     dump_file = "data.pkl"
 
@@ -69,17 +73,17 @@ if __name__ == "__main__":
     import numpy as np
     rng = np.random.default_rng()
 
+    from candidate_set import CandidateSet
+    candidate_set = CandidateSet(
+        domain, bfs_tree, rng, min_macro_size, max_macro_size, wildcard_rate, rollout_length,
+        num_patterns, num_instances, max_depth, max_macros)
+
+    def evaluate_fun(candidate):
+        candidate, objectives = candidate_set.evaluate(candidate)
+        objectives = np.array(objectives)[1:]
+        return candidate, objectives
+
     if dotrain:
-
-        from candidate_set import CandidateSet
-        candidate_set = CandidateSet(
-            domain, bfs_tree, rng, min_macro_size, max_macro_size, wildcard_rate, rollout_length,
-            num_patterns, num_instances, max_depth, max_macros)
-
-        def evaluate_fun(candidate):
-            candidate, objectives = candidate_set.evaluate(candidate)
-            objectives = np.array(objectives)[1:]
-            return candidate, objectives
 
         pareto_search(
             num_candidates,
@@ -97,7 +101,7 @@ if __name__ == "__main__":
 
         with open(dump_file, "rb") as f: (candidate, objectives, frontier) = pk.load(f)
 
-        C = len(candidate)
+        C = max(candidate.keys()) + 1
         objectives = objectives[:C]
         color = np.tile(np.linspace(1, .5, C), (3,1)).T
         color[frontier,:] = 0
@@ -119,8 +123,8 @@ if __name__ == "__main__":
         pt.ylabel("# godly solves")
         
         pt.subplot(1,3,2)
-        pt.plot(np.arange(C), [candidate[c].match_counts.sum() for c in range(C)], '-k')
-        pt.plot(frontier, [candidate[c].match_counts.sum() for c in frontier], '-ob')
+        pt.scatter(sorted(candidate.keys()), [candidate[c].match_counts.sum() for c in sorted(candidate.keys())], color='k')
+        pt.scatter(frontier, [candidate[c].match_counts.sum() for c in frontier], color='r')
         pt.xlabel("candidate")
         pt.ylabel("total match count")
 
@@ -136,27 +140,32 @@ if __name__ == "__main__":
     if postmortem:
         with open(dump_file, "rb") as f: (candidate, objectives, frontier) = pk.load(f)
         
-        match_counts = np.zeros(num_patterns)
-        for f in range(len(frontier)):
+        # # match counts for most godly solves
+        # f = frontier[np.argmax(objectives[frontier,1])]
+        # cand, objs = evaluate_fun(candidate[f])
+        # pt.bar(np.arange(len(cand.match_counts)), cand.match_counts, width=.5, label="most godly")
 
-            patterns, macros = candidate[frontier[f]]
-            pdb = PatternDatabase(patterns, macros, domain)
-    
-            evaluate(domain, bfs_tree, pdb, rng, num_instances, max_scrambles, max_depth, max_macros),
-            # # print(pdb.match_counts)
-            match_counts += pdb.match_counts
-            # print(pdb.match_counts.max())
-            # print(pdb.hit_counts)
-            print((pdb.patterns == 0).sum(axis=1), pdb.patterns.shape[1])
-            
-            # pt.subplot(4,1,f+1)
-            # pt.imshow(pdb.patterns.T)
-            # # pt.imshow(np.concatenate((pdb.hit_counts.T / pdb.num_queries, pdb.match_counts[np.newaxis]), axis=0))
-            # if f == 3: break
+        # # match counts for least godly solves
+        # f = frontier[np.argmin(objectives[frontier,1])]
+        # cand, objs = evaluate_fun(candidate[f])
+        # pt.bar(np.arange(len(cand.match_counts))+.5, cand.match_counts, width=.5, label="least godly")
 
-            # mutate(patterns, macros, rng, mutation_rate, sample_macro_fun),
+        # pt.legend()
+        # pt.show()
 
-        pt.bar(np.arange(len(match_counts)), match_counts)
-
+        # variability due to instance sample
+        candidate_set.num_instances = 512
+        num_samples = 5
+        godlies = np.empty((2,num_samples))
+        for f,fun in enumerate([np.argmin, np.argmax]):
+            cand = candidate[frontier[fun(objectives[frontier,1])]]
+            for rep in range(num_samples):
+                cand, objs = candidate_set.evaluate(cand)
+                godlies[f,rep] = objs[2]
+        print("stat, less, more godly:")
+        print("avg", godlies.mean(axis=1))
+        print("std", godlies.std(axis=1))
+        pt.hist(godlies.T, label=["less","more"])
+        pt.legend()
         pt.show()
 

@@ -7,8 +7,6 @@ class PatternDatabase:
     def __init__(self, patterns, macros, domain):
         # macros[i] is action sequence for patterns[i]
         # 0 in pattern matches anything, 1 <= v <= 6 matches specific color
-        self.match_index = 0
-        self.matched = False
 
         # expand db with rotational symmetries
         self.patterns = np.empty((24*len(patterns), domain.state_size()), dtype=int)
@@ -20,8 +18,17 @@ class PatternDatabase:
                 self.syms.append(domain.inverse_symmetry_of(s))
                 self.macros.append(macros[p])
 
+        # initialize matches and traces
+        self.reset()
+
+    def reset(self):
+
+        # match results
+        self.match_index = 0
+        self.matched = False
+
         # trace query history
-        self.match_counts = np.zeros(len(patterns), dtype=int) # aggregates across symmetry
+        self.match_counts = np.zeros(len(self.patterns) // 24, dtype=int) # aggregates across symmetry
         self.hit_counts = np.zeros(self.patterns.shape, dtype=int)
         self.num_queries = 0
 
@@ -38,7 +45,7 @@ class PatternDatabase:
         # self.match_index = matches
 
         # update trace
-        self.match_counts[self.match_index // 24] += 1
+        if self.match_index.size > 0: self.match_counts[self.match_index[0] // 24] += 1
         self.hit_counts += hits
         self.num_queries += 1
 
