@@ -97,26 +97,29 @@ class CandidateSet:
 
         return candidate, objectives
 
-    def mutate_unmatched(self, candidate):
+    def mutate(self, candidate):
+
+        scores = candidate.good_match_counts - candidate.fail_match_counts
+        p = np.argmin(scores)
+
         patterns = list(candidate.patterns)
         macros = list(candidate.macros)
-        match_counts = candidate.match_counts
-        for p in np.flatnonzero(match_counts == match_counts.min()):
-            patterns[p], macros[p] = self.sample_macro()
+        patterns[p], macros[p] = self.sample_macro()
+
         return Candidate(patterns, macros)
     
 if __name__ == "__main__":
     
-    cube_size = 3
+    cube_size = 2
     max_scrambles = 5
     num_instances = 128
     tree_depth = 3
     max_depth = 1
-    max_macros = 2
+    max_macros = 5
     num_patterns = 32
     min_macro_size = 1
-    max_macro_size = 4
-    wildcard_rate = .1
+    max_macro_size = 5
+    wildcard_rate = .5
     rollout_length = 20
 
     from cube import CubeDomain
@@ -139,7 +142,7 @@ if __name__ == "__main__":
     print("macro_size = %d" % macro_size)
     print("godly_solves = %d" % godly_solves)
 
-    candidate, objectives = candidate_set.evaluate(candidate_set.mutate_unmatched(candidate))
+    candidate, objectives = candidate_set.evaluate(candidate_set.mutate(candidate))
     pattern_size, macro_size, godly_solves = objectives
 
     print()

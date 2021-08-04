@@ -48,7 +48,7 @@ if __name__ == "__main__":
     # postmortem = False
 
     cube_size = 2
-    num_instances = 64
+    num_instances = 256
     tree_depth = 3
     max_depth = 1
     max_macros = 5
@@ -57,8 +57,8 @@ if __name__ == "__main__":
     max_macro_size = 5
     wildcard_rate = .5
     rollout_length = 20
-    # num_candidates = 2**16
-    num_candidates = 64
+    num_candidates = 2**16
+    # num_candidates = 64
     obj_names = ["macro size", "godly solves"]
     dump_file = "data.pkl"
 
@@ -89,7 +89,7 @@ if __name__ == "__main__":
             num_candidates,
             rng,
             spawn = candidate_set.spawn,
-            mutate = candidate_set.mutate_unmatched,
+            mutate = candidate_set.mutate,
             evaluate = evaluate_fun,
             obj_names = obj_names,
             dump_file = dump_file,
@@ -155,17 +155,22 @@ if __name__ == "__main__":
 
         # variability due to instance sample
         candidate_set.num_instances = 512
-        num_samples = 5
+        num_samples = 30
         godlies = np.empty((2,num_samples))
-        for f,fun in enumerate([np.argmin, np.argmax]):
-            cand = candidate[frontier[fun(objectives[frontier,1])]]
-            for rep in range(num_samples):
+        for rep in range(num_samples):
+            print("rep %d of %d" % (rep, num_samples))
+            for f,fun in enumerate([np.argmin, np.argmax]):
+                cand = candidate[frontier[fun(objectives[frontier,1])]]
                 cand, objs = candidate_set.evaluate(cand)
                 godlies[f,rep] = objs[2]
+        godlies /= candidate_set.num_instances
         print("stat, less, more godly:")
         print("avg", godlies.mean(axis=1))
         print("std", godlies.std(axis=1))
-        pt.hist(godlies.T, label=["less","more"])
+        pt.hist(godlies.T, label=["least godly pioneer","most godly pioneer"])
+        pt.xlabel("Godly solve rate")
+        pt.ylabel("Frequency")
+        pt.title("Variability across instance samples")
         pt.legend()
         pt.show()
 
