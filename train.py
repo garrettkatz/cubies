@@ -1,7 +1,7 @@
 import numpy as np
 import pickle as pk
 
-def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, obj_scales, dump_file):
+def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_file):
 
     candidate = {}
     objective = np.empty((num_candidates, len(obj_names)))
@@ -18,14 +18,10 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, obj_s
         # # only sample from strict frontier (inhibits exploration)
         # selection = rng.choice(frontier)
 
-        # # sample from loose frontier (could overexploit some local nondominant region)
-        # selection = rng.choice(np.flatnonzero(distance[:c] == 0))
+        # sample from loose frontier (could overexploit some local nondominant region)
+        selection = rng.choice(np.flatnonzero(distance[:c] == 0))
 
-        # sample inversely proportion to distance
-        proximity = -distance[:c]
-        probs = np.exp(proximity)
-        probs /= probs.sum()
-        selection = rng.choice(c, p=probs)
+        # sample inversely proportion to normalize distance?
 
         # mutate and evaluate selection
         candidate[c], objective[c] = evaluate(mutate(candidate[selection]))
@@ -44,7 +40,7 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, obj_s
 
             # update distances for all previous candidates
             distance[:c] = np.fabs(
-                (objective[:c, np.newaxis] - objective[np.newaxis, frontier]) * obj_scales
+                (objective[:c, np.newaxis] - objective[np.newaxis, frontier])
             ).min(axis=2).min(axis=1)
 
             # save progress
@@ -53,7 +49,7 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, obj_s
         else:
 
             # frontier didn't change, just update distance for this candidate
-            distance[c] = np.fabs((objective[c] - objective[frontier]) * obj_scales).min()
+            distance[c] = np.fabs(objective[c] - objective[frontier]).min()
 
         bests = ["%s: %s" % (obj_names[i], objective[:c+1, i].max()) for i in range(objective.shape[1])]
         print("%d  |  %d in frontier  |  bests: %s" % (c, frontier.size, ", ".join(bests)))
@@ -91,10 +87,6 @@ if __name__ == "__main__":
     num_candidates = 2**17
     # num_candidates = 32
     obj_names = ["macro size", "godly solves"]
-    obj_scales = np.array([
-        1. / (num_patterns * max_macro_size),
-        1. / num_instances,
-    ])
     dump_file = "data.pkl"
 
     rng = np.random.default_rng()
@@ -126,7 +118,6 @@ if __name__ == "__main__":
             mutate = candidate_set.mutate,
             evaluate = evaluate_fun,
             obj_names = obj_names,
-            obj_scales = obj_scales,
             dump_file = dump_file,
         )
 
@@ -147,7 +138,8 @@ if __name__ == "__main__":
         # color[:,0] = 1
         # color[frontier,2] = color[frontier, 0]
         # color[frontier,0] = 0
-        rando = (objectives + .0*(rng.random(objectives.shape) - .5)) * obj_scales
+        rando = (objectives + .5*(rng.random(objectives.shape) - .5))
+        # rando = (objectives + .5*(rng.random(objectives.shape) - .5))
         
         pt.figure(figsize=(15,5))
         pt.subplot(1,3,1)
