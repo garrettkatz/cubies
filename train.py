@@ -13,8 +13,9 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
 
         candidate[c], objective[c] = evaluate(mutate(candidate[rng.choice(frontier)]))
 
-        dominators = (objective[frontier] > objective[c]).all(axis=1)
+        # dominators = (objective[frontier] > objective[c]).all(axis=1)
         # remainders = (objective[frontier] >= objective[c]).any(axis=1)
+        dominators = (objective[frontier] >= objective[c]).all(axis=1)
         remainders = (objective[frontier] > objective[c]).any(axis=1)
 
         if not dominators.any():
@@ -104,7 +105,7 @@ if __name__ == "__main__":
 
         C = max(candidate.keys()) + 1
         objectives = objectives[:C]
-        color = np.tile(np.linspace(.9, .25, C), (3,1)).T
+        color = np.tile(np.linspace(.9, .5, C), (3,1)).T
         color[frontier,:] = 0
         # # color = np.ones((C, 3))
         # # color[:,0] = np.linspace(0, .5, C)
@@ -114,7 +115,7 @@ if __name__ == "__main__":
         # color[:,0] = 1
         # color[frontier,2] = color[frontier, 0]
         # color[frontier,0] = 0
-        rando = objectives + .1*(rng.random(objectives.shape) - .5)
+        rando = objectives + .0*(rng.random(objectives.shape) - .5)
         
         pt.figure(figsize=(15,5))
         pt.subplot(1,3,1)
