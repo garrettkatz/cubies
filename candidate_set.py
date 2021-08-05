@@ -100,7 +100,11 @@ class CandidateSet:
     def mutate(self, candidate):
 
         scores = candidate.good_match_counts - candidate.fail_match_counts
-        p = np.argmin(scores)
+        # p = np.argmin(scores) # too hard, can inhibit exploration
+        costs = -scores
+        probs = np.exp(costs - costs.max())
+        probs /= probs.sum()
+        p = self.rng.choice(len(candidate.patterns), p=probs)
 
         patterns = list(candidate.patterns)
         macros = list(candidate.macros)
