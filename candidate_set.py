@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as pt
 from pattern_database import PatternDatabase
 from algorithm import run
 
@@ -6,9 +7,12 @@ class Candidate:
     def __init__(self, patterns, macros):
         self.patterns = patterns
         self.macros = macros
-        self.good_match_counts = None
-        self.fail_match_counts = None
+        self.scramble_counts = None
         self.match_counts = None
+        self.num_queries = None
+        self.macro_counts = None
+        self.action_counts = None
+        self.successes = None
 
 class CandidateSet:
 
@@ -47,51 +51,44 @@ class CandidateSet:
     def evaluate(self, candidate):
 
         # initialize traces
-        candidate.good_match_counts = np.zeros(len(candidate.patterns), dtype=int)
-        candidate.fail_match_counts = np.zeros(len(candidate.patterns), dtype=int)
-        candidate.match_counts = np.zeros(len(candidate.patterns), dtype=int)
+        candidate.scramble_counts = np.empty(self.num_instances, dtype=int)
+        candidate.match_counts = np.empty((self.num_instances, len(candidate.patterns)), dtype=int)
+        candidate.num_queries = np.empty(self.num_instances, dtype=int)
+        candidate.macro_counts = np.empty(self.num_instances, dtype=int)
+        candidate.action_counts = np.empty(self.num_instances, dtype=int)
+        candidate.successes = np.empty(self.num_instances, dtype=bool)
 
         ### Run candidate on problem instances
         pattern_database = PatternDatabase(candidate.patterns, candidate.macros, self.domain)
-        result = {}
-        scramble_length = {}
-        plan_length = {}
 
         for i in range(self.num_instances):
 
             # Run algorithm on instance
-            scramble_length[i] = self.rng.integers(1, self.rollout_length, endpoint=True)
-            state = self.domain.random_state(scramble_length[i], self.rng)
-            result[i] = run(state, self.domain, self.bfs_tree, pattern_database, self.max_depth, self.max_macros)
-            success = (result[i] != False)
+            candidate.scramble_counts[i] = self.rng.integers(1, self.rollout_length, endpoint=True)
+            state = self.domain.random_state(candidate.scramble_counts[i], self.rng)
+            solved, plan = run(state, self.domain, self.bfs_tree, pattern_database, self.max_depth, self.max_macros)
+            candidate.successes[i] = solved
 
-            # Record plan length
-            if success:
-                plan_length[i] = 0
-                for (actions, sym, macro) in result[i]: plan_length[i] += len(actions) + len(macro)
+            # Record plan length and macro count
+            candidate.action_counts[i] = 0
+            for (actions, sym, macro) in plan: candidate.action_counts[i] += len(actions) + len(macro)
+            candidate.macro_counts[i] = len(plan)
 
-            # Update traces
-            if success:
-                candidate.good_match_counts += pattern_database.match_counts
-            else:
-                candidate.fail_match_counts += pattern_database.match_counts
+            # Update database metrics
+            candidate.match_counts[i] = pattern_database.match_counts
+            candidate.num_queries[i] = pattern_database.num_queries
             pattern_database.reset()
     
-        # Overall match counts
-        candidate.match_counts = candidate.good_match_counts + candidate.fail_match_counts
-
         ### Evaluate objective functions
         # solve in <= 20 steps
-        # solve in <= rollout_length steps
+        # solve in <= scramble steps
         # smaller number of patterns
         # smaller macro lengths
         # less complex patterns (like colors grouped together, more wildcards)?
         
         pattern_size = -len(candidate.patterns)
         macro_size = -sum(map(len, candidate.macros))
-        godly_solves = sum(
-            int((result[i] != False) and (plan_length[i] <= min(self.domain.god_number(), scramble_length[i])))
-            for i in range(self.num_instances))
+        godly_solves = (candidate.successes & (candidate.action_counts <= np.minimum(self.domain.god_number(), candidate.scramble_counts[i]))).sum()
     
         objectives = (pattern_size, macro_size, godly_solves)
 
@@ -99,18 +96,58 @@ class CandidateSet:
 
     def mutate(self, candidate):
 
-        scores = candidate.good_match_counts - candidate.fail_match_counts
-        # p = np.argmin(scores) # too hard, can inhibit exploration
-        costs = -scores
-        probs = np.exp(costs - costs.max())
-        probs /= probs.sum()
-        p = self.rng.choice(len(candidate.patterns), p=probs)
+        patterns = [pattern.copy() for pattern in candidate.patterns]
+        macros = [macro.copy() for macro in candidate.macros]
 
-        patterns = list(candidate.patterns)
-        macros = list(candidate.macros)
+        # # change one pattern+macro based on match counts
+        # scores = candidate.good_match_counts - candidate.fail_match_counts
+        # # p = np.argmin(scores) # too hard, can inhibit exploration
+        # costs = -scores
+        # probs = np.exp(costs - costs.max())
+        # probs /= probs.sum()
+        # p = self.rng.choice(len(candidate.patterns), p=probs)
+        # patterns[p], macros[p] = self.sample_macro()
+
+        # mutation types:
+        # change one element of one pattern to wildcard
+        p = self.rng.choice(len(patterns))
+        patterns[p][self.rng.choice(len(patterns[p]))] = 0
+        
+        # change one action of one macro
+        m = self.rng.choice(len(macros))
+        a = self.rng.choice(len(macros[m]))
+        macros[m][a] = tuple(self.rng.choice(self.domain.valid_actions()))
+
+        # add or delete one action of one macro
+        m = self.rng.choice(len(macros))
+        a = self.rng.integers(self.max_macro_size, endpoint=True)
+        if a < len(macros[m]) and self.min_macro_size < len(macros[m]):
+            macros[m] = macros[m][:a] + macros[m][a+1:]
+        else:
+            macros[m] = macros[m] + [tuple(self.rng.choice(self.domain.valid_actions()))]
+
+        # change one pattern+macro
+        p = self.rng.choice(len(patterns))
         patterns[p], macros[p] = self.sample_macro()
-
+        
         return Candidate(patterns, macros)
+
+    def show(self, candidate, cap=8):
+        _, axs = pt.subplots(min(cap, len(candidate.patterns)), self.max_macro_size + 1)
+        for p in range(min(cap, len(candidate.patterns))):
+            state = candidate.patterns[p]
+            self.domain.render(state, axs[p,0], x0=0, y0=0)
+            for m in range(len(candidate.macros[p])):
+                action = candidate.macros[p][m]
+                state = self.domain.perform(action, state)
+                self.domain.render(state, axs[p,m+1], x0=0, y0=0)
+                axs[p,m+1].set_title(str(action))
+            for m in range(self.max_macros+1):
+                axs[p,m].axis("equal")
+                axs[p,m].axis('off')
+        axs[0,0].set_title("Patterns")
+        # pt.tight_layout()
+        pt.show()
     
 if __name__ == "__main__":
     

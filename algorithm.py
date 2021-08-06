@@ -1,6 +1,6 @@
 def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
     # returns result = (actions, symmetry index, macro)
-    # or result = False if there is no path to a macro
+    # or result = False if there is no path to a macro or solved state
     
     for actions, permutation in bfs_tree:
 
@@ -23,8 +23,9 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
     return False
 
 def run(state, domain, bfs_tree, pattern_database, max_depth, max_macros):
-    # returns plan = [...,(actions, sym index, macro),...] a sequence of macro_search results to the solved state
-    # or plan = False if no plan is found
+    # returns solved, plan
+    # solved: True if path to solved state was found, False otherwise
+    # plan: [...,(actions, sym index, macro),...] a sequence of macro_search results
     
     # Form plan one macro at a time
     plan = []
@@ -34,7 +35,7 @@ def run(state, domain, bfs_tree, pattern_database, max_depth, max_macros):
         result = macro_search(state, domain, bfs_tree, pattern_database, max_depth)
         
         # Return failure if none found
-        if result is False: return False
+        if result is False: return False, plan
         
         # Otherwise, execute search result
         actions, sym, macro = result
@@ -44,10 +45,10 @@ def run(state, domain, bfs_tree, pattern_database, max_depth, max_macros):
         plan.append(result)
 
         # Terminate once solved
-        if domain.is_solved_in(state): return plan
+        if domain.is_solved_in(state): return True, plan
     
-    # At this point, no plan was found, so return failure
-    return False
+    # At this point, no successful plan was found
+    return False, plan
 
 if __name__ == "__main__":
 
@@ -110,8 +111,8 @@ if __name__ == "__main__":
     state = domain.perform((1,0,1), domain.symmetries_of(patterns[1])[21])
     # state = domain.symmetries_of(patterns[1])[15]
     # state = patterns[1]
-    result = run(state, domain, bfs_tree, pattern_database, max_depth=1, max_macros=2)
-    if result != False:
+    solved, plan = run(state, domain, bfs_tree, pattern_database, max_depth=1, max_macros=2)
+    if solved:
 
         import matplotlib.pyplot as pt
         def draw(st, title, i):
@@ -124,7 +125,7 @@ if __name__ == "__main__":
         i = 1
         draw(state, "initial", i)
         i += 1
-        for (actions, sym, macro) in result:
+        for (actions, sym, macro) in plan:
             print(actions)
             print(sym)
             print(macro)
