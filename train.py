@@ -56,66 +56,49 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
 
     candidate = {}
     objective = np.empty((num_candidates, len(obj_names)))
-    distance = np.zeros(num_candidates)
+    selection_count = np.zeros(num_candidates)
 
     candidate[0], objective[0] = evaluate(spawn())
-    frontier = np.array([0])
+    frontier = np.array([0]) # set of all candidates that are not strictly dominated by others explored so far
     pioneer = dict(candidate) # candidates that were ever in a frontier
 
     for c in range(1, num_candidates):
 
-        ### sample a candidate for mutation
-
-        # # only sample from strict frontier (inhibits exploration)
-        # selection = rng.choice(frontier)
-
-        # sample from loose frontier (could overexploit some local nondominant region)
-        selection = rng.choice(np.flatnonzero(distance[:c] == 0))
-
-        # sample inversely proportion to normalize distance?
+        # sample a candidate for mutation
+        s = rng.choice(frontier)
+        selection_count[s] += 1
 
         # mutate and evaluate selection
-        candidate[c], objective[c] = evaluate(mutate(candidate[selection]))
+        candidate[c], objective[c] = evaluate(mutate(candidate[s]))
 
-        # update frontier if changed and save progress
-        # maintains invariant that frontier contains all and only the candidates that are strictly non-dominated
-        dominators = (objective[frontier] >= objective[c]).all(axis=1)
-        if not dominators.any():
+        # update frontier if child is not strictly dominated
+        # x strictly dominates y if (x > y).all()
+        if (objective[frontier] <= objective[c]).any(axis=1).all():
 
-            # identify old frontier candidates that remain undominated
-            remainders = (objective[frontier] > objective[c]).any(axis=1)
+            # keep existing frontier members that are still not strictly dominated
+            keep = (objective[frontier] >= objective[c]).any(axis=1)
 
             # update frontier and pioneers
-            frontier = np.append(frontier[remainders], [c])
+            frontier = np.append(frontier[keep], [c])
             pioneer[c] = candidate[c]
-
-            # update distances for all previous candidates
-            distance[:c] = np.fabs(
-                (objective[:c, np.newaxis] - objective[np.newaxis, frontier])
-            ).min(axis=2).min(axis=1)
 
             # save progress
             with open(dump_file, "wb") as df: pk.dump((pioneer, objective, frontier), df)
 
-        else:
-
-            # frontier didn't change, just update distance for this candidate
-            distance[c] = np.fabs(objective[c] - objective[frontier]).min()
-
         bests = ["%s: %s" % (obj_names[i], objective[:c+1, i].max()) for i in range(objective.shape[1])]
         print("%d  |  %d in frontier  |  bests: %s" % (c, frontier.size, ", ".join(bests)))
 
-    return candidate, objective, frontier
+    return candidate, objective, frontier, selection_count
 
 if __name__ == "__main__":
     
-    # dotrain = True
-    # showresults = False
-    # postmortem = False
-
-    dotrain = False
-    showresults = True
+    dotrain = True
+    showresults = False
     postmortem = False
+
+    # dotrain = False
+    # showresults = True
+    # postmortem = False
 
     # dotrain = False
     # showresults = False
@@ -162,8 +145,8 @@ if __name__ == "__main__":
 
     if dotrain:
 
-        # pareto_search(
-        pareto_chains(
+        pareto_search(
+        # pareto_chains(
             num_candidates,
             rng,
             spawn = candidate_set.spawn,
@@ -177,12 +160,12 @@ if __name__ == "__main__":
 
     if showresults:
 
-        # # dump_file = "data_2.pkl"
-        # with open(dump_file, "rb") as df: (candidate, objectives, frontier) = pk.load(df) # pareto_search
+        # dump_file = "data_2.pkl"
+        with open(dump_file, "rb") as df: (candidate, objectives, frontier) = pk.load(df)[:3] # pareto_search
 
-        # with open(dump_file, "rb") as df: (candidate, objectives, frontier, num_children, num_nondominated_children) = pk.load(df)
-        with open(dump_file, "rb") as df: (candidate, objectives, frontier) = pk.load(df)
-        frontier = np.array(sorted(frontier))
+        # # with open(dump_file, "rb") as df: (candidate, objectives, frontier, num_children, num_nondominated_children) = pk.load(df)
+        # with open(dump_file, "rb") as df: (candidate, objectives, frontier) = pk.load(df)
+        # frontier = np.array(sorted(frontier))
 
         C = max(candidate.keys()) + 1
         objectives = objectives[:C]
@@ -223,8 +206,8 @@ if __name__ == "__main__":
 
     if postmortem:
         # dump_file = "data_2.pkl"
-        dump_file = "data_2_saturated.pkl"
-        with open(dump_file, "rb") as f: (candidate, objectives, frontier) = pk.load(f)
+        # dump_file = "data_2_saturated.pkl"
+        with open(dump_file, "rb") as f: (candidate, objectives, frontier) = pk.load(f)[:3]
         pioneers = list(sorted(candidate.keys()))
         
         # # variability due to instance sample
