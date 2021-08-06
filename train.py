@@ -1,6 +1,48 @@
 import numpy as np
 import pickle as pk
 
+def pareto_chains(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_file):
+
+    candidate = {}
+    objective = np.empty((num_candidates, len(obj_names)))
+    candidate[0], objective[0] = evaluate(spawn())
+
+    parent = {} # ancestry pointers
+    frontier = {0} # candidates not currently dominated by a child or parent
+    pioneers = dict(candidate) # candidates that were ever in a frontier
+
+    for c in range(1, num_candidates):
+
+        # sample a candidate parent for mutation
+        p = rng.choice(list(frontier))
+
+        # mutate and evaluate selection
+        candidate[c], objective[c] = evaluate(mutate(candidate[p]))
+
+        # check whether parent or child dominates the other
+        child_dominates = (objective[c] >= objective[p]).all() and (objective[c] > objective[p]).any()
+        parent_dominates = (objective[p] >= objective[c]).all() and (objective[p] > objective[c]).any()
+
+        # add child to frontier as long as it is not dominated by parent
+        if (objective[c] > objective[p]).any():
+            frontier.add(c)
+            pioneers[c] = candidate[c]
+            parent[c] = p
+
+        # discard all ancesters dominated by child
+        while p > 0:
+            if (objective[c] >= objective[p]).all(): frontier.discard(p)
+            p = parent[p]
+
+        # save progress when frontier changes
+        if child_dominates or not parent_dominates:
+            with open(dump_file, "wb") as df: pk.dump((pioneers, objective, frontier), df)
+
+        bests = ["%s: %s" % (obj_names[i], objective[:c+1, i].max()) for i in range(objective.shape[1])]
+        print("%d  |  %d in frontier  |  bests: %s" % (c, len(frontier), ", ".join(bests)))
+
+    return candidate, objective, frontier
+
 def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_file):
 
     candidate = {}
@@ -85,7 +127,7 @@ if __name__ == "__main__":
     wildcard_rate = .5
     rollout_length = 20
     num_candidates = 2**17
-    # num_candidates = 32
+    # num_candidates = 128
     obj_names = ["macro size", "godly solves"]
     dump_file = "data.pkl"
 
@@ -111,7 +153,8 @@ if __name__ == "__main__":
 
     if dotrain:
 
-        pareto_search(
+        # pareto_search(
+        pareto_chains(
             num_candidates,
             rng,
             spawn = candidate_set.spawn,
@@ -126,6 +169,7 @@ if __name__ == "__main__":
     if showresults:
 
         with open(dump_file, "rb") as f: (candidate, objectives, frontier) = pk.load(f)
+        frontier = np.array(sorted(frontier))
 
         C = max(candidate.keys()) + 1
         objectives = objectives[:C]
@@ -138,8 +182,7 @@ if __name__ == "__main__":
         # color[:,0] = 1
         # color[frontier,2] = color[frontier, 0]
         # color[frontier,0] = 0
-        rando = (objectives + .5*(rng.random(objectives.shape) - .5))
-        # rando = (objectives + .5*(rng.random(objectives.shape) - .5))
+        rando = (objectives + .0*(rng.random(objectives.shape) - .5))
         
         pt.figure(figsize=(15,5))
         pt.subplot(1,3,1)
