@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as pt
 from pattern_database import PatternDatabase
 from algorithm import run
+from utils import softmax
 
 class Candidate:
     def __init__(self, patterns, macros):
@@ -94,25 +95,32 @@ class CandidateSet:
 
         return candidate, objectives
 
+    def mutate_scores(self, candidate):
+        patterns = [pattern.copy() for pattern in candidate.patterns]
+        macros = [macro.copy() for macro in candidate.macros]
+
+        # change one pattern+macro based on match counts
+        # scores = candidate.good_match_counts - candidate.fail_match_counts
+        scores = candidate.match_counts[candidate.successes].sum(axis=0) - candidate.match_counts[~candidate.successes].sum(axis=0)
+        # p = np.argmin(scores) # too hard, can inhibit exploration
+        costs = -scores
+        probs = np.exp(costs - costs.max())
+        probs /= probs.sum()
+        p = self.rng.choice(len(candidate.patterns), p=probs)
+        patterns[p], macros[p] = self.sample_macro()
+
+        return Candidate(patterns, macros)
+
     def mutate(self, candidate):
 
         patterns = [pattern.copy() for pattern in candidate.patterns]
         macros = [macro.copy() for macro in candidate.macros]
 
-        # # change one pattern+macro based on match counts
-        # scores = candidate.good_match_counts - candidate.fail_match_counts
-        # # p = np.argmin(scores) # too hard, can inhibit exploration
-        # costs = -scores
-        # probs = np.exp(costs - costs.max())
-        # probs /= probs.sum()
-        # p = self.rng.choice(len(candidate.patterns), p=probs)
-        # patterns[p], macros[p] = self.sample_macro()
-
         # mutation types:
         # change one element of one pattern to wildcard
         p = self.rng.choice(len(patterns))
         patterns[p][self.rng.choice(len(patterns[p]))] = 0
-        
+
         # change one action of one macro
         m = self.rng.choice(len(macros))
         a = self.rng.choice(len(macros[m]))
@@ -130,6 +138,49 @@ class CandidateSet:
         p = self.rng.choice(len(patterns))
         patterns[p], macros[p] = self.sample_macro()
         
+        return Candidate(patterns, macros)
+
+    def mutate_macro(self, candidate):
+
+        patterns = [pattern.copy() for pattern in candidate.patterns]
+        macros = [macro.copy() for macro in candidate.macros]
+
+        # mutation types:
+        # change one element of one pattern to wildcard
+        p = self.rng.choice(len(patterns))
+        patterns[p][self.rng.choice(len(patterns[p]))] = 0
+
+        # add, delete, or change one action of one macro
+        # choosing the macro: prefer ones that were used a lot and usually failed
+        # match_counts: num instance x num patterns|macros
+        probs = softmax(np.sqrt(candidate.match_counts.sum(axis=0) * candidate.match_counts[candidate.successes].sum(axis=0)))
+
+        # choosing add, delete or change depends on two things:
+        # if usually fails early, add (correlated fails and earlies)
+        # if usually fails at end, del (correlated fails and lates)
+        # if fails but evenly at different steps, change (fails not correlated with endpoints)
+        # or, do each
+
+        # change one action of one macro
+        m = self.rng.choice(len(macros), p = probs)
+        a = self.rng.integers(self.max_macro_size, endpoint=True)
+        if a < len(macros[m]): macros[m][a] = tuple(self.rng.choice(self.domain.valid_actions()))
+
+        # delete one action of one macro
+        m = self.rng.choice(len(macros), p = probs)
+        if len(macros[m]) > self.min_macro_size:
+            a = self.rng.integers(self.max_macro_size, endpoint=True)
+            if a < len(macros[m]): macros[m] = macros[m][:a] + macros[m][a+1:]
+
+        # add one action to one macro
+        m = self.rng.choice(len(macros), p = probs)
+        if len(macros[m]) < self.max_macro_size:
+            macros[m] = macros[m] + [tuple(self.rng.choice(self.domain.valid_actions()))]
+
+        # change one pattern+macro
+        p = self.rng.choice(len(patterns), p = probs)
+        patterns[p], macros[p] = self.sample_macro()
+
         return Candidate(patterns, macros)
 
     def show(self, candidate, cap=8):

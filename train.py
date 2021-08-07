@@ -1,5 +1,6 @@
 import numpy as np
 import pickle as pk
+from utils import softmax
 
 def pareto_chains(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_file):
 
@@ -52,11 +53,6 @@ def pareto_chains(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
 
     return candidate, objective, frontier
 
-def softmax(a):
-    a = np.array(a)
-    a = np.exp(a - a.max())
-    return a / a.sum()
-
 def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_file):
 
     candidate = {}
@@ -101,9 +97,9 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
 
 if __name__ == "__main__":
 
-    dotrain = True
-    showresults = False
-    postmortem = False
+    # dotrain = True
+    # showresults = False
+    # postmortem = False
 
     # dotrain = False
     # showresults = True
@@ -121,9 +117,9 @@ if __name__ == "__main__":
     # showresults = True
     # postmortem = True
 
-    # dotrain = True
-    # showresults = True
-    # postmortem = True
+    dotrain = True
+    showresults = True
+    postmortem = True
 
     cube_size = 2
     num_instances = 256
@@ -138,6 +134,9 @@ if __name__ == "__main__":
     num_candidates = 2**17
     # num_candidates = 1024
     obj_names = ["macro size", "godly solves"]
+    # mutate = "mutate"
+    # mutate = "mutate_scores"
+    mutate = "mutate_macro"
     dump_file = "data.pkl"
 
     rng = np.random.default_rng()
@@ -167,7 +166,8 @@ if __name__ == "__main__":
             num_candidates,
             rng,
             spawn = candidate_set.spawn,
-            mutate = candidate_set.mutate,
+            # mutate = candidate_set.mutate,
+            mutate = getattr(candidate_set, mutate),
             evaluate = evaluate_fun,
             obj_names = obj_names,
             dump_file = dump_file,
@@ -200,6 +200,8 @@ if __name__ == "__main__":
         pt.subplot(1,3,1)
         pt.scatter(*rando.T, color=color)
         pt.scatter(*rando[frontier].T, color='k')
+        # pt.scatter(*rando.T, s=1, color=color)
+        # pt.scatter(*rando[frontier].T, s=1, color='k')
 
         pt.xlabel("- macro size")
         pt.ylabel("# godly solves")
@@ -285,12 +287,12 @@ if __name__ == "__main__":
         # pt.legend()
         # pt.show()
 
-        # # clarify sources of ungodliness
-        # candidate_set.num_instances = 512
-        # cand = candidate[frontier[np.argmax(objectives[frontier,1])]]
-        # # cand = candidate[rng.choice(frontier)]
-        # cand = Candidate(cand.patterns, cand.macros)
-        # cand, obj = candidate_set.evaluate(cand)
+        # clarify sources of ungodliness
+        candidate_set.num_instances = 512
+        cand = candidate[frontier[np.argmax(objectives[frontier,1])]]
+        # cand = candidate[rng.choice(frontier)]
+        cand = Candidate(cand.patterns, cand.macros)
+        cand, obj = candidate_set.evaluate(cand)
 
         # pt.bar(np.arange(cand.match_counts.shape[1]), cand.match_counts.sum(axis=0), width=.3, label="total")
         # pt.bar(np.arange(cand.match_counts.shape[1]) + .3, cand.match_counts[cand.successes,:].sum(axis=0), width=.3, label="good")
@@ -314,47 +316,49 @@ if __name__ == "__main__":
         # pt.legend(["pass","fail"])
         # pt.show()
 
-        # # how many macros executed on successful and failed runs?
-        # # how many actions executed ""? (plan length)
-        # pt.subplot(2,1,1)
-        # pt.bar(np.arange(len(cand.macro_counts)), cand.macro_counts * cand.successes, width=.3, label="pass")
-        # pt.bar(np.arange(len(cand.macro_counts)) + .3, cand.macro_counts * (1 - cand.successes), width=.3, label="fail")
-        # pt.xlabel("Instance")
-        # pt.ylabel("Macro counts")
-        # pt.legend()
-        # pt.subplot(2,1,2)
-        # pt.bar(np.arange(len(cand.action_counts)), cand.action_counts * cand.successes, width=.3, label="pass")
-        # pt.bar(np.arange(len(cand.action_counts)) + .3, cand.action_counts * (1 - cand.successes), width=.3, label="fail")
-        # pt.xlabel("Instance")
-        # pt.ylabel("Action counts")
-        # pt.legend()
-        # pt.show()
+        # how many macros executed on successful and failed runs?
+        # how many actions executed ""? (plan length)
+        pt.subplot(2,1,1)
+        pt.bar(np.arange(len(cand.macro_counts)), cand.macro_counts * cand.successes, width=.3, label="pass")
+        pt.bar(np.arange(len(cand.macro_counts)) + .3, cand.macro_counts * (1 - cand.successes), width=.3, label="fail")
+        pt.xlabel("Instance")
+        pt.ylabel("Macro counts")
+        pt.legend()
+        pt.subplot(2,1,2)
+        pt.bar(np.arange(len(cand.action_counts)), cand.action_counts * cand.successes, width=.3, label="pass")
+        pt.bar(np.arange(len(cand.action_counts)) + .3, cand.action_counts * (1 - cand.successes), width=.3, label="fail")
+        pt.xlabel("Instance")
+        pt.ylabel("Action counts")
+        pt.legend()
+        pt.show()
         
-        # # visualize most godly candidate
-        # candidate_set.num_instances = 512
-        # cand = candidate[frontier[np.argmax(objectives[frontier,1])]]
-        # cand = Candidate(cand.patterns, cand.macros)
-        # cand, obj = candidate_set.evaluate(cand)
-        # # candidate_set.show(cand)
+        # visualize most godly candidate
+        candidate_set.num_instances = 512
+        cand = candidate[frontier[np.argmax(objectives[frontier,1])]]
+        cand = Candidate(cand.patterns, cand.macros)
+        cand, obj = candidate_set.evaluate(cand)
+        # candidate_set.show(cand)
         
-        # # just show best and worst patterns
-        # idx = np.argsort((cand.match_counts[cand.successes].sum(axis=0) - cand.match_counts[~cand.successes].sum(axis=0)))
-        # patterns = []
-        # macros = []
-        # for i in range(4):
-        #     patterns.append(cand.patterns[idx[i]])
-        #     macros.append(cand.macros[idx[i]])
-        # for i in range(4):
-        #     patterns.append(cand.patterns[idx[i-4]])
-        #     macros.append(cand.macros[idx[i-4]])
-        # candidate_set.show(Candidate(patterns, macros))
+        # just show best and worst patterns
+        idx = np.argsort((cand.match_counts[cand.successes].sum(axis=0) - cand.match_counts[~cand.successes].sum(axis=0)))
+        patterns = []
+        macros = []
+        for i in range(4):
+            patterns.append(cand.patterns[idx[i]])
+            macros.append(cand.macros[idx[i]])
+        for i in range(4):
+            patterns.append(cand.patterns[idx[i-4]])
+            macros.append(cand.macros[idx[i-4]])
+        candidate_set.show(Candidate(patterns, macros))
 
         # count frequency of each frontier point in objective space
         # freqs = {}
         # for f in frontier:
         #     obj = tuple(objectives[f])
         #     freqs[obj] = freqs.get(obj, 0) + 1
-        freqs = data[3]
+        concentration = data[3]
+        freqs = concentration
+        # freqs = {key: concentration[key] for key in [tuple(obj) for obj in objectives[frontier,:]]}
 
         pt.plot(sorted(freqs.values()))
         pt.title("Sorted frequencies of distinct objective vectors")
