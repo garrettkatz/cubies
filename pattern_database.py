@@ -4,19 +4,24 @@ import numpy as np
 # grounded or wildcard
 class PatternDatabase:
 
-    def __init__(self, patterns, macros, domain):
+    def __init__(self, patterns, wildcard, macros, domain):
         # macros[i] is action sequence for patterns[i]
-        # 0 in pattern matches anything, 1 <= v <= 6 matches specific color
+        # patterns[i,j]: 1 <= v <= 6 matches specific color in state
+        # patterns[i,j] need not match if wildcard[i,j] == 1
 
         # expand db with rotational symmetries
         self.patterns = np.empty((24*len(patterns), domain.state_size()), dtype=int)
-        self.syms = []
+        self.wildcard = np.empty((24*len(patterns), domain.state_size()), dtype=bool)
         self.macros = []
-        for p, pattern in enumerate(patterns):
-            for s, sym_pattern in enumerate(domain.symmetries_of(pattern)):
-                self.patterns[24*p + s] = sym_pattern
-                self.syms.append(domain.inverse_symmetry_of(s))
+        self.syms = []
+        for p in range(len(patterns)):
+            sym_patterns = domain.symmetries_of(patterns[p])
+            sym_wildcard = domain.symmetries_of(wildcard[p])
+            for s in range(24):
+                self.patterns[24*p + s] = sym_patterns[s]
+                self.wildcard[24*p + s] = sym_wildcard[s]
                 self.macros.append(macros[p])
+                self.syms.append(domain.inverse_symmetry_of(s))
 
         # initialize matches and traces
         self.reset()
@@ -35,7 +40,7 @@ class PatternDatabase:
     def query(self, state):
 
         # brute query
-        hits = (self.patterns == state) | (self.patterns == 0)
+        hits = (self.patterns == state) | (self.wildcard)
         self.match_index = np.flatnonzero(hits.all(axis=1))
 
         # # progressive query
@@ -185,16 +190,19 @@ if __name__ == "__main__":
         domain.perform((1,0,1), state),
         state,
     ])
-    patterns[2, (patterns[0] != patterns[1])] = 0
+    # patterns[2, (patterns[0] != patterns[1])] = 0
+    wildcard = np.zeros(patterns.shape, dtype=bool)
+    wildcard[2, (patterns[0] != patterns[1])] = True
     macros = [(0,), (1,), (2,)]
     
-    pattern_database = PatternDatabase(patterns, macros, domain)
+    pattern_database = PatternDatabase(patterns, wildcard, macros, domain)
     states = [
         state,
         domain.perform((1,0,1), state),
         domain.perform((1,0,2), state),
         domain.symmetries_of(state)[domain.inverse_symmetry_of(15)],
         domain.perform((2,0,1), state),
+        domain.symmetries_of(domain.perform((1,0,2), state))[domain.inverse_symmetry_of(15)],
     ]
 
     for state in states:
@@ -203,8 +211,9 @@ if __name__ == "__main__":
         print(state)
         print(matched)
         if matched:
-            print(pattern_database.match_index[0])
-            print(pattern_database.patterns[pattern_database.match_index[0]])
+            idx = pattern_database.match_index[0]
+            print(idx)
+            print(pattern_database.patterns[idx] * (1 - pattern_database.wildcard[idx]))
             print(pattern_database.result())
 
     print()
@@ -217,4 +226,6 @@ if __name__ == "__main__":
     assert pattern_database.query(states[3])
     assert pattern_database.result() == (15, [0])
     assert pattern_database.query(states[4]) == False
+    assert pattern_database.query(states[5])
+    assert pattern_database.result() == (15, [2])
 

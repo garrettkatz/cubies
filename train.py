@@ -97,17 +97,17 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
 
 if __name__ == "__main__":
 
-    # dotrain = True
-    # showresults = False
-    # postmortem = False
+    dotrain = True
+    showresults = False
+    postmortem = False
 
     # dotrain = False
     # showresults = True
     # postmortem = False
 
-    dotrain = False
-    showresults = False
-    postmortem = True
+    # dotrain = False
+    # showresults = False
+    # postmortem = True
 
     # dotrain = True
     # showresults = True
@@ -135,9 +135,9 @@ if __name__ == "__main__":
     num_candidates = 32
     obj_names = ["macro size", "godly solves"]
 
-    # mutate = "mutate"
+    mutate = "mutate"
     # mutate = "mutate_scores"
-    mutate = "mutate_macro"
+    # mutate = "mutate_macro"
 
     num_reps = 4
     break_seconds = 5
@@ -185,7 +185,7 @@ if __name__ == "__main__":
                 mutate = getattr(candidate_set, mutate),
                 evaluate = evaluate_fun,
                 obj_names = obj_names,
-                dump_file = "%s/%d.pkl" % (dump_dir, rep),
+                dump_file = "%s/rep_%d.pkl" % (dump_dir, rep),
             )
 
             print("Breaking for %s seconds..." % str(break_seconds))

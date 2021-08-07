@@ -95,11 +95,12 @@ if __name__ == "__main__":
         domain.execute([(0,0,1),(1,0,1)], state),
         domain.execute([(0,0,1),(1,0,1),(2,0,1),(1,0,1),(0,0,1)], state),
     ))
+    wildcard = np.zeros(patterns.shape, dtype=bool)
     macros = (
         [(1,0,3),(0,0,3)],
         [(0,0,3),(1,0,3),(2,0,3)],
     )
-    pattern_database = PatternDatabase(patterns, macros, domain)
+    pattern_database = PatternDatabase(patterns, wildcard, macros, domain)
 
     matched = pattern_database.query(domain.symmetries_of(patterns[1])[15])
     print(matched)

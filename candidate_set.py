@@ -5,8 +5,9 @@ from algorithm import run
 from utils import softmax
 
 class Candidate:
-    def __init__(self, patterns, macros):
+    def __init__(self, patterns, wildcard, macros):
         self.patterns = patterns
+        self.wildcard = wildcard
         self.macros = macros
         self.scramble_counts = None
         self.match_counts = None
@@ -36,18 +37,23 @@ class CandidateSet:
         hi = lo + macro_size
         actions = self.rng.choice(list(self.domain.valid_actions()), size=self.rollout_length, replace=True)
         macro = self.domain.reverse(actions[lo:hi])
-        state = self.domain.execute(actions[:hi], self.domain.solved_state())
-        pattern = state * (self.rng.random(state.shape) > self.wildcard_rate).astype(int)
+        pattern = self.domain.execute(actions[:hi], self.domain.solved_state())
         return pattern, macro
     
     def spawn(self):
+
+        # sample macros with valid patterns
         patterns = []
         macros = []
         for p in range(self.num_patterns):
             pattern, macro = self.sample_macro()
             patterns.append(pattern)
             macros.append(macro)
-        return Candidate(patterns, macros)
+
+        # sample wildcards
+        wildcard = (self.rng.random((len(patterns), self.domain.state_size())) < self.wildcard_rate)
+
+        return Candidate(patterns, wildcard, macros)
 
     def evaluate(self, candidate):
 
@@ -60,7 +66,7 @@ class CandidateSet:
         candidate.successes = np.empty(self.num_instances, dtype=bool)
 
         ### Run candidate on problem instances
-        pattern_database = PatternDatabase(candidate.patterns, candidate.macros, self.domain)
+        pattern_database = PatternDatabase(candidate.patterns, candidate.wildcard, candidate.macros, self.domain)
 
         for i in range(self.num_instances):
 
@@ -109,36 +115,37 @@ class CandidateSet:
         p = self.rng.choice(len(candidate.patterns), p=probs)
         patterns[p], macros[p] = self.sample_macro()
 
-        return Candidate(patterns, macros)
+        return Candidate(patterns, wildcard, macros)
 
     def mutate(self, candidate):
 
         patterns = [pattern.copy() for pattern in candidate.patterns]
         macros = [macro.copy() for macro in candidate.macros]
+        wildcard = candidate.wildcard.copy()
 
         # mutation types:
-        # change one element of one pattern to wildcard
+        # change one (or none) wildcard of one pattern
         p = self.rng.choice(len(patterns))
-        patterns[p][self.rng.choice(len(patterns[p]))] = 0
+        i = self.rng.choice(len(patterns[p]))
+        wildcard[p, i] = self.rng.choice([True, False])
 
-        # change one action of one macro
+        # change one (or none) action of one macro
         m = self.rng.choice(len(macros))
-        a = self.rng.choice(len(macros[m]))
-        macros[m][a] = tuple(self.rng.choice(self.domain.valid_actions()))
+        a = self.rng.integers(self.max_macro_size)
+        if a < len(macros[m]): macros[m][a] = tuple(self.rng.choice(self.domain.valid_actions()))
 
-        # add or delete one action of one macro
+        # delete one (or none) action of one macro
         m = self.rng.choice(len(macros))
-        a = self.rng.integers(self.max_macro_size, endpoint=True)
-        if a < len(macros[m]) and self.min_macro_size < len(macros[m]):
-            macros[m] = macros[m][:a] + macros[m][a+1:]
-        else:
+        if len(macros[m]) > self.min_macro_size:
+            a = self.rng.integers(self.max_macro_size)
+            if a < len(macros[m]): macros[m] = macros[m][:a] + macros[m][a+1:]
+
+        # add one (or none) action to one macro
+        m = self.rng.choice(len(macros))
+        if len(macros[m]) < self.max_macro_size:
             macros[m] = macros[m] + [tuple(self.rng.choice(self.domain.valid_actions()))]
 
-        # change one pattern+macro
-        p = self.rng.choice(len(patterns))
-        patterns[p], macros[p] = self.sample_macro()
-        
-        return Candidate(patterns, macros)
+        return Candidate(patterns, wildcard, macros)
 
     def mutate_macro(self, candidate):
 
@@ -181,7 +188,7 @@ class CandidateSet:
         p = self.rng.choice(len(patterns), p = probs)
         patterns[p], macros[p] = self.sample_macro()
 
-        return Candidate(patterns, macros)
+        return Candidate(patterns, wildcard, macros)
 
     def show(self, candidate, cap=8):
         _, axs = pt.subplots(min(cap, len(candidate.patterns)), self.max_macro_size + 1)
