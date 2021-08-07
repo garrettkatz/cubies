@@ -51,7 +51,7 @@ def pareto_chains(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
         bests = ["%s: %s" % (obj_names[i], objective[:c+1, i].max()) for i in range(objective.shape[1])]
         print("%d  |  %d in frontier  |  bests: %s" % (c, len(frontier), ", ".join(bests)))
 
-    return candidate, objective, frontier
+    return candidate, objective, frontie
 
 def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_file):
 
@@ -105,9 +105,9 @@ if __name__ == "__main__":
     # showresults = True
     # postmortem = False
 
-    # dotrain = False
-    # showresults = False
-    # postmortem = True
+    dotrain = False
+    showresults = False
+    postmortem = True
 
     # dotrain = True
     # showresults = True
@@ -117,9 +117,9 @@ if __name__ == "__main__":
     # showresults = True
     # postmortem = True
 
-    dotrain = True
-    showresults = True
-    postmortem = True
+    # dotrain = True
+    # showresults = True
+    # postmortem = True
 
     cube_size = 2
     num_instances = 256
@@ -131,13 +131,24 @@ if __name__ == "__main__":
     max_macro_size = 5
     wildcard_rate = .5
     rollout_length = 20
-    num_candidates = 2**17
-    # num_candidates = 1024
+    # num_candidates = 2**17
+    num_candidates = 32
     obj_names = ["macro size", "godly solves"]
+
     # mutate = "mutate"
     # mutate = "mutate_scores"
     mutate = "mutate_macro"
-    dump_file = "data.pkl"
+
+    num_reps = 4
+    break_seconds = 5
+    dump_dir = "reptest"
+
+    # # dump_file = "data.pkl"
+    # # dump_file = "data_2_saturated.pkl" # incorrect loose with some interiors: -32, 64
+    # # dump_file = "data_2_loose.pkl" # -32, 56
+    # # dump_file = "data_2_loose_ungodly.pkl" # -32, 44 and x2 size of saturated data
+    # # dump_file = "data_2_loose_concentration.pkl" # -32, 64 and x30 size of saturated data (concentration data?)
+    # dump_file = "data_2_mutate_macro.pkl" # -32, 49 and x100 size of saturated data (ran to completion?)
 
     rng = np.random.default_rng()
 
@@ -161,23 +172,31 @@ if __name__ == "__main__":
 
     if dotrain:
 
-        pareto_search(
-        # pareto_chains(
-            num_candidates,
-            rng,
-            spawn = candidate_set.spawn,
-            # mutate = candidate_set.mutate,
-            mutate = getattr(candidate_set, mutate),
-            evaluate = evaluate_fun,
-            obj_names = obj_names,
-            dump_file = dump_file,
-        )
+        from time import sleep
+
+        for rep in range(num_reps):
+
+            pareto_search(
+            # pareto_chains(
+                num_candidates,
+                rng,
+                spawn = candidate_set.spawn,
+                # mutate = candidate_set.mutate,
+                mutate = getattr(candidate_set, mutate),
+                evaluate = evaluate_fun,
+                obj_names = obj_names,
+                dump_file = "%s/%d.pkl" % (dump_dir, rep),
+            )
+
+            print("Breaking for %s seconds..." % str(break_seconds))
+            sleep(break_seconds)
 
     import matplotlib.pyplot as pt
 
     if showresults:
 
         # dump_file = "data_2.pkl"
+        dump_file = "%s/0.pkl" % dump_dir
         with open(dump_file, "rb") as df: data = pk.load(df)
 
         (candidate, objectives, frontier) = data[:3]
@@ -228,6 +247,7 @@ if __name__ == "__main__":
 
         # dump_file = "data_2.pkl"
         # dump_file = "data_2_saturated.pkl"
+        dump_file = "%s/0.pkl" % dump_dir
         with open(dump_file, "rb") as f:  data = pk.load(f)
         (candidate, objectives, frontier) = data[:3]
         pioneers = list(sorted(candidate.keys()))
