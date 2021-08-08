@@ -199,7 +199,7 @@ class CandidateSet:
     def show(self, candidate, cap=8):
         _, axs = pt.subplots(min(cap, len(candidate.patterns)), self.max_macro_size + 1)
         for p in range(min(cap, len(candidate.patterns))):
-            state = candidate.patterns[p]
+            state = candidate.patterns[p] * (1 - candidate.wildcard[p])
             self.domain.render(state, axs[p,0], x0=0, y0=0)
             for m in range(len(candidate.macros[p])):
                 action = candidate.macros[p][m]

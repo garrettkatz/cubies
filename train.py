@@ -95,6 +95,63 @@ def pareto_search(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_
 
     return candidate, objective, frontier, concentration
 
+def pareto_ranking(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump_file):
+    # ranking[c] is the number of candidates that dominate c (frontier is rank 0)
+
+    candidate = {}
+    objective = np.empty((num_candidates, len(obj_names)))
+    candidate[0], objective[0] = evaluate(spawn())
+    pioneer = dict(candidate) # candidates that were ever in a frontier
+
+    frontier = np.array([0])
+    ranking = np.zeros(num_candidates)
+    count = np.zeros(num_candidates)
+
+    num_spawns = 1 # number of independently spawned candidates
+    frontier_lifetime = 0 # number of steps since frontier last changed
+
+    for c in range(1, num_candidates):
+
+        # spawn new if frontier unchanged for many steps
+        if rng.random() < (frontier_lifetime / c):
+
+            candidate[c], objective[c] = evaluate(spawn())
+            num_spawns += 1
+
+        # otherwise sample a previous candidate for mutation
+        else:
+
+            Q = ranking[:c].max() - ranking[:c]
+            probs = softmax(Q + np.sqrt(np.log(c) / (count[:c]+1)))
+            s = rng.choice(c, p = probs)
+
+            candidate[c], objective[c] = evaluate(mutate(candidate[s]))
+            count[s] += 1
+        
+        # update rankings
+        diffs = objective[:c] - objective[c]
+        ranking[c] = ((diffs >= 0).all(axis=1) & (diffs > 0).any(axis=1)).sum()
+        ranking[:c] += ((diffs <= 0).all(axis=1) & (diffs < 0).any(axis=1))
+        if c+1 < num_candidates: ranking[c+1] = ranking[:c+1].max()
+
+        # check for updated frontier
+        if ranking[c] == 0:
+
+            # update frontier and pioneers
+            frontier_lifetime = 0
+            frontier = np.flatnonzero(ranking[:c+1] == 0)
+            pioneer[c] = candidate[c]
+
+            # save progress
+            with open(dump_file, "wb") as df: pk.dump((pioneer, objective, frontier, ranking, count), df)
+
+        else: frontier_lifetime += 1
+
+        bests = ["%s: %s" % (obj_names[i], objective[:c+1, i].max()) for i in range(objective.shape[1])]
+        print("%d | %d in frontier | %d spawns | counts <=%d | bests: %s" % (c, frontier.size, num_spawns, count[:c+1].max(), ", ".join(bests)))
+
+    return candidate, objective, frontier, ranking, count
+
 if __name__ == "__main__":
 
     dotrain = True
@@ -131,16 +188,17 @@ if __name__ == "__main__":
     max_macro_size = 5
     wildcard_rate = .5
     rollout_length = 20
-    num_candidates = 2**10
-    # num_candidates = 32
+    num_candidates = 2**18
+    # num_candidates = 512
     obj_names = ["macro size", "godly solves"]
 
     mutate = "mutate_unguided"
     # mutate = "mutate_scores"
     # mutate = "mutate_macro"
 
-    num_reps = 4
+    num_reps = 30
     break_seconds = 30 * 60
+    # break_seconds = 5
     dump_dir = "%s" % mutate
 
     # # dump_file = "data.pkl"
@@ -179,7 +237,8 @@ if __name__ == "__main__":
 
         for rep in range(num_reps):
 
-            pareto_search(
+            pareto_ranking(
+            # pareto_search(
             # pareto_chains(
                 num_candidates,
                 rng,
@@ -198,8 +257,18 @@ if __name__ == "__main__":
 
     if showresults:
 
+        # frontiers across repetitions
+        for rep in range(num_reps):
+            dump_file = "%s/rep_%d.pkl" % (dump_dir, rep)
+            with open(dump_file, "rb") as df: data = pk.load(df)    
+            (candidate, objectives, frontier) = data[:3]
+            pt.scatter(*objectives[frontier,:].T)
+        pt.xlabel("-macro size")
+        pt.ylabel("godly solves")
+        pt.show()
+
         # dump_file = "data_2.pkl"
-        dump_file = "%s/0.pkl" % dump_dir
+        dump_file = "%s/rep_1.pkl" % dump_dir
         with open(dump_file, "rb") as df: data = pk.load(df)
 
         (candidate, objectives, frontier) = data[:3]
@@ -250,7 +319,7 @@ if __name__ == "__main__":
 
         # dump_file = "data_2.pkl"
         # dump_file = "data_2_saturated.pkl"
-        dump_file = "%s/0.pkl" % dump_dir
+        dump_file = "%s/rep_1.pkl" % dump_dir
         with open(dump_file, "rb") as f:  data = pk.load(f)
         (candidate, objectives, frontier) = data[:3]
         pioneers = list(sorted(candidate.keys()))
@@ -265,7 +334,7 @@ if __name__ == "__main__":
         #     for f,fun in enumerate([np.argmin, np.argmax]):
         #         # cand = candidate[frontier[fun(objectives[frontier,1])]]
         #         cand = candidate[pioneers[fun(objectives[pioneers,1])]]
-        #         cand, objs = candidate_set.evaluate(Candidate(cand.patterns, cand.macros))
+        #         cand, objs = candidate_set.evaluate(Candidate(cand.patterns, cand.wildcard, cand.macros))
         #         godlies[f,rep] = objs[2]
         # godlies /= candidate_set.num_instances
         # print("stat, less, more godly:")
@@ -284,7 +353,7 @@ if __name__ == "__main__":
         # for i, (fun, lab) in enumerate(zip([np.argmin, np.argmax], ["min", "max"])):
         #     f = frontier[fun(objectives[frontier,1])]
         #     cand = candidate[f]
-        #     cand, objs = candidate_set.evaluate(Candidate(cand.patterns, cand.macros))
+        #     cand, objs = candidate_set.evaluate(Candidate(cand.patterns, cand.wildcard, cand.macros))
         #     pt.bar(np.arange(cand.match_counts.shape[1]) + i*.5, cand.match_counts.sum(axis=0), width=.5, label=lab + " godly")
         # pt.legend()
         # pt.xlabel("pattern index")
@@ -296,7 +365,7 @@ if __name__ == "__main__":
 
         #     f = frontier[fun(objectives[frontier,1])]
         #     cand = candidate[f]
-        #     cand, objs = candidate_set.evaluate(Candidate(cand.patterns, cand.macros))
+        #     cand, objs = candidate_set.evaluate(Candidate(cand.patterns, cand.wildcard, cand.macros))
 
         #     # scores = (cand.match_counts[cand.successes,:] - cand.match_counts[~cand.successes,:]).sum(axis=0)
         #     # p = np.argmin(scores)
@@ -314,7 +383,7 @@ if __name__ == "__main__":
         candidate_set.num_instances = 512
         cand = candidate[frontier[np.argmax(objectives[frontier,1])]]
         # cand = candidate[rng.choice(frontier)]
-        cand = Candidate(cand.patterns, cand.macros)
+        cand = Candidate(cand.patterns, cand.wildcard, cand.macros)
         cand, obj = candidate_set.evaluate(cand)
 
         # pt.bar(np.arange(cand.match_counts.shape[1]), cand.match_counts.sum(axis=0), width=.3, label="total")
@@ -331,7 +400,7 @@ if __name__ == "__main__":
         # for f in frontier:
         #     print(f)
         #     cand = candidate[f]
-        #     candidate[f], _ = candidate_set.evaluate(Candidate(cand.patterns, cand.macros))
+        #     candidate[f], _ = candidate_set.evaluate(Candidate(cand.patterns, cand.wildcard, cand.macros))
         # pt.hist([
         #     np.concatenate([candidate[f].macro_counts[candidate[f].successes] for f in frontier]),
         #     np.concatenate([candidate[f].macro_counts[~candidate[f].successes] for f in frontier])
@@ -358,7 +427,7 @@ if __name__ == "__main__":
         # visualize most godly candidate
         candidate_set.num_instances = 512
         cand = candidate[frontier[np.argmax(objectives[frontier,1])]]
-        cand = Candidate(cand.patterns, cand.macros)
+        cand = Candidate(cand.patterns, cand.wildcard, cand.macros)
         cand, obj = candidate_set.evaluate(cand)
         # candidate_set.show(cand)
         
@@ -372,16 +441,17 @@ if __name__ == "__main__":
         for i in range(4):
             patterns.append(cand.patterns[idx[i-4]])
             macros.append(cand.macros[idx[i-4]])
-        candidate_set.show(Candidate(patterns, macros))
+        wildcard = cand.wildcard[idx[[0,1,2,3,-4,-3,-2,-1]],:].copy()
+        candidate_set.show(Candidate(patterns, wildcard, macros))
 
         # count frequency of each frontier point in objective space
-        # freqs = {}
-        # for f in frontier:
-        #     obj = tuple(objectives[f])
-        #     freqs[obj] = freqs.get(obj, 0) + 1
-        concentration = data[3]
-        freqs = concentration
-        # freqs = {key: concentration[key] for key in [tuple(obj) for obj in objectives[frontier,:]]}
+        freqs = {}
+        for f in frontier:
+            obj = tuple(objectives[f])
+            freqs[obj] = freqs.get(obj, 0) + 1
+        # concentration = data[3]
+        # freqs = concentration
+        # # freqs = {key: concentration[key] for key in [tuple(obj) for obj in objectives[frontier,:]]}
 
         pt.plot(sorted(freqs.values()))
         pt.title("Sorted frequencies of distinct objective vectors")
