@@ -1,3 +1,4 @@
+import itertools as it
 import numpy as np
 import matplotlib.pyplot as pt
 from pattern_database import PatternDatabase
@@ -117,7 +118,7 @@ class CandidateSet:
 
         return Candidate(patterns, wildcard, macros)
 
-    def mutate(self, candidate):
+    def mutate_unguided(self, candidate):
 
         patterns = [pattern.copy() for pattern in candidate.patterns]
         macros = [macro.copy() for macro in candidate.macros]
@@ -128,6 +129,11 @@ class CandidateSet:
         p = self.rng.choice(len(patterns))
         i = self.rng.choice(len(patterns[p]))
         wildcard[p, i] = self.rng.choice([True, False])
+
+        # perform one (or none) twist to one pattern state
+        p = self.rng.choice(len(patterns))
+        axis, plane, twist = self.rng.choice(list(it.product([0,1,2], range(self.domain.N), [-1,0,1])))
+        patterns[p] = self.domain.perform((axis, plane, twist), patterns[p])
 
         # change one (or none) action of one macro
         m = self.rng.choice(len(macros))
@@ -241,7 +247,7 @@ if __name__ == "__main__":
     print("macro_size = %d" % macro_size)
     print("godly_solves = %d" % godly_solves)
 
-    candidate, objectives = candidate_set.evaluate(candidate_set.mutate(candidate))
+    candidate, objectives = candidate_set.evaluate(candidate_set.mutate_unguided(candidate))
     pattern_size, macro_size, godly_solves = objectives
 
     print()

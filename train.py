@@ -131,17 +131,17 @@ if __name__ == "__main__":
     max_macro_size = 5
     wildcard_rate = .5
     rollout_length = 20
-    # num_candidates = 2**17
-    num_candidates = 32
+    num_candidates = 2**10
+    # num_candidates = 32
     obj_names = ["macro size", "godly solves"]
 
-    mutate = "mutate"
+    mutate = "mutate_unguided"
     # mutate = "mutate_scores"
     # mutate = "mutate_macro"
 
     num_reps = 4
-    break_seconds = 5
-    dump_dir = "reptest"
+    break_seconds = 30 * 60
+    dump_dir = "%s" % mutate
 
     # # dump_file = "data.pkl"
     # # dump_file = "data_2_saturated.pkl" # incorrect loose with some interiors: -32, 64
@@ -151,6 +151,9 @@ if __name__ == "__main__":
     # dump_file = "data_2_mutate_macro.pkl" # -32, 49 and x100 size of saturated data (ran to completion?)
 
     rng = np.random.default_rng()
+
+    import os
+    if not os.path.exists(dump_dir): os.system("mkdir %s" % dump_dir)
 
     from cube import CubeDomain
     domain = CubeDomain(cube_size)
