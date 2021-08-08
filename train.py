@@ -154,13 +154,13 @@ def pareto_ranking(num_candidates, rng, spawn, mutate, evaluate, obj_names, dump
 
 if __name__ == "__main__":
 
-    dotrain = True
-    showresults = False
-    postmortem = False
-
-    # dotrain = False
-    # showresults = True
+    # dotrain = True
+    # showresults = False
     # postmortem = False
+
+    dotrain = False
+    showresults = True
+    postmortem = False
 
     # dotrain = False
     # showresults = False
@@ -260,18 +260,21 @@ if __name__ == "__main__":
         # frontiers across repetitions
         for rep in range(num_reps):
             dump_file = "%s/rep_%d.pkl" % (dump_dir, rep)
-            with open(dump_file, "rb") as df: data = pk.load(df)    
-            (candidate, objectives, frontier) = data[:3]
-            pt.scatter(*objectives[frontier,:].T)
+            if os.path.exists(dump_file):
+                with open(dump_file, "rb") as df: data = pk.load(df)    
+                (candidate, objectives, frontier) = data[:3]
+                pt.scatter(*objectives[frontier,:].T, label = str(rep))
         pt.xlabel("-macro size")
         pt.ylabel("godly solves")
+        pt.legend()
         pt.show()
 
         # dump_file = "data_2.pkl"
-        dump_file = "%s/rep_1.pkl" % dump_dir
+        dump_file = "%s/rep_0.pkl" % dump_dir
         with open(dump_file, "rb") as df: data = pk.load(df)
 
         (candidate, objectives, frontier) = data[:3]
+        ranking, count = data[3:5]
         # frontier = np.array(sorted(frontier)) # pareto chains
 
         C = max(candidate.keys()) + 1
@@ -289,22 +292,40 @@ if __name__ == "__main__":
         
         pt.figure(figsize=(15,5))
         pt.subplot(1,3,1)
-        pt.scatter(*rando.T, color=color)
-        pt.scatter(*rando[frontier].T, color='k')
+        pt.scatter(*rando.T, s=None, color=color)
+        pt.scatter(*rando[frontier].T, s=None, color='k')
         # pt.scatter(*rando.T, s=1, color=color)
         # pt.scatter(*rando[frontier].T, s=1, color='k')
-
+        pt.title("Larger c is darker")
         pt.xlabel("- macro size")
         pt.ylabel("# godly solves")
         
         pt.subplot(1,3,2)
+        color = np.tile(.9 * ranking[:C] / ranking[:C].max(), (3,1)).T
+        pt.scatter(*rando.T, s=None, color=color)
+        pt.scatter(*rando[frontier].T, s=None, color='k')
+        pt.title("Better rank is darker")
+        pt.xlabel("- macro size")
+        pt.ylabel("# godly solves")
+
+        pt.subplot(1,3,3)
+        color = np.tile(.9 * (1 - count[:C] / count[:C].max()), (3,1)).T
+        pt.scatter(*rando.T, s=None, color=color)
+        pt.scatter(*rando[frontier].T, s=None, color='k')
+        pt.title("Higher count is darker")
+        pt.xlabel("- macro size")
+        pt.ylabel("# godly solves")
+
+        pt.show()
+        
+        pt.subplot(1,2,1)
         pt.scatter(sorted(candidate.keys()), [candidate[c].match_counts.sum() for c in sorted(candidate.keys())], color='k')
         pt.scatter(frontier, [candidate[c].match_counts.sum() for c in frontier], color='r')
         pt.xlabel("candidate")
         pt.ylabel("total match count")
         pt.legend(["all pioneers", "frontier"])
 
-        pt.subplot(1,3,3)
+        pt.subplot(1,2,2)
         # idx = np.argsort(objectives[frontier, 1])
         # pt.plot(objectives[frontier[idx], 1], sorted([candidate[c].match_counts.sum() for c in frontier[idx]]), '-ob')
         pt.scatter(objectives[frontier, 1], [candidate[c].match_counts.sum() for c in frontier])
@@ -319,7 +340,7 @@ if __name__ == "__main__":
 
         # dump_file = "data_2.pkl"
         # dump_file = "data_2_saturated.pkl"
-        dump_file = "%s/rep_1.pkl" % dump_dir
+        dump_file = "%s/rep_0.pkl" % dump_dir
         with open(dump_file, "rb") as f:  data = pk.load(f)
         (candidate, objectives, frontier) = data[:3]
         pioneers = list(sorted(candidate.keys()))
