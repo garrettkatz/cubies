@@ -34,7 +34,7 @@ class PatternDatabase:
 
         # trace query history
         self.match_counts = np.zeros(len(self.patterns) // 24, dtype=int) # aggregates across symmetry
-        self.hit_counts = np.zeros(self.patterns.shape, dtype=int)
+        self.miss_counts = np.zeros(self.patterns.shape, dtype=int)
         self.num_queries = 0
 
     def query(self, state):
@@ -50,8 +50,12 @@ class PatternDatabase:
         # self.match_index = matches
 
         # update trace
-        if self.match_index.size > 0: self.match_counts[self.match_index[0] // 24] += 1
-        self.hit_counts += hits
+        if self.match_index.size > 0:
+            idx = self.match_index[0]
+            self.match_counts[idx // 24] += 1
+            self.miss_counts[:idx] += ~hits[:idx]
+        else:
+            self.miss_counts += ~hits
         self.num_queries += 1
 
         # return status

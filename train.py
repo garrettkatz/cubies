@@ -270,7 +270,7 @@ if __name__ == "__main__":
         pt.show()
 
         # dump_file = "data_2.pkl"
-        dump_file = "%s/rep_0.pkl" % dump_dir
+        dump_file = "%s/rep_1.pkl" % dump_dir
         with open(dump_file, "rb") as df: data = pk.load(df)
 
         (candidate, objectives, frontier) = data[:3]
