@@ -4,24 +4,30 @@ import numpy as np
 # grounded or wildcard
 class PatternDatabase:
 
-    def __init__(self, patterns, wildcard, macros, domain):
+    def __init__(self, patterns, wildcard, macros, domain, orientation_neutral=True):
         # macros[i] is action sequence for patterns[i]
         # patterns[i,j]: 1 <= v <= 6 matches specific color in state
         # patterns[i,j] need not match if wildcard[i,j] == 1
 
-        # expand db with rotational symmetries
-        self.patterns = np.empty((24*len(patterns), domain.state_size()), dtype=int)
-        self.wildcard = np.empty((24*len(patterns), domain.state_size()), dtype=bool)
-        self.macros = []
-        self.syms = []
-        for p in range(len(patterns)):
-            sym_patterns = domain.orientations_of(patterns[p])
-            sym_wildcard = domain.orientations_of(wildcard[p])
-            for s in range(24):
-                self.patterns[24*p + s] = sym_patterns[s]
-                self.wildcard[24*p + s] = sym_wildcard[s]
-                self.macros.append(macros[p])
-                self.syms.append(domain.inverse_symmetry_of(s))
+        if orientation_neutral:
+            # expand db with rotational symmetries
+            self.patterns = np.empty((24*len(patterns), domain.state_size()), dtype=int)
+            self.wildcard = np.empty((24*len(patterns), domain.state_size()), dtype=bool)
+            self.macros = []
+            self.syms = []
+            for p in range(len(patterns)):
+                sym_patterns = domain.orientations_of(patterns[p])
+                sym_wildcard = domain.orientations_of(wildcard[p])
+                for s in range(24):
+                    self.patterns[24*p + s] = sym_patterns[s]
+                    self.wildcard[24*p + s] = sym_wildcard[s]
+                    self.macros.append(macros[p])
+                    self.syms.append(domain.inverse_symmetry_of(s))
+        else:
+            self.patterns = np.array(patterns)
+            self.wildcard = np.array(wildcard)
+            self.macros = list(self.macros)
+            self.syms = [0] * len(patterns)
 
         # initialize matches and traces
         self.reset()
@@ -107,11 +113,11 @@ if __name__ == "__main__":
 
     print()
     assert pattern_database.query(states[0])
-    assert pattern_database.result() == (20, [0])
+    assert pattern_database.result() == (0, [0])
     assert pattern_database.query(states[1])
-    assert pattern_database.result() == (20, [1])
+    assert pattern_database.result() == (0, [1])
     assert pattern_database.query(states[2])
-    assert pattern_database.result() == (20, [2])
+    assert pattern_database.result() == (0, [2])
     assert pattern_database.query(states[3])
     assert pattern_database.result() == (15, [0])
     assert pattern_database.query(states[4]) == False
