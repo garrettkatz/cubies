@@ -89,8 +89,8 @@ class CubeDomain:
         for a, p, n in it.product((0,1,2), range(N), (2, 3, 4)):
             twist_permutation[a, p, n % 4] = twist_permutation[a, p, n-1][twist_permutation[a, p, 1]]
 
-        # rotational symmetries of the full cube are also computed via state permutations
-        symmetry_permutation = np.empty((24, num_facies), dtype=int)
+        # orientations of the full cube are also computed via state permutations
+        orientation_permutation = np.empty((24, num_facies), dtype=int)
 
         # helper function to rotate all planes around a given axis
         def rotate_all_planes(state, axis, num_twists):
@@ -100,37 +100,37 @@ class CubeDomain:
             return state
 
         # compute symmetry permutations
-        for s, (axis, direction, num_twists) in enumerate(it.product((0,1,2),(-1,1),(0,1,2,3))):
+        for s, (axis, direction, num_twists) in enumerate(it.product((2,0,1), (1,-1), (0,1,2,3))):
             # align top face with one of six directed axes
             permuted = np.arange(num_facies)
             if axis != 2: permuted = rotate_all_planes(permuted, 1-axis, direction)
             elif direction != 1: permuted = rotate_all_planes(permuted, 0, 2)
             # rotate cube around directed axis
             permuted = rotate_all_planes(permuted, axis, num_twists)
-            symmetry_permutation[s] = permuted
+            orientation_permutation[s] = permuted
 
-        # determine symmetry inverses
-        inverse_symmetry = {}
-        for s, s_inv in it.product(range(24), repeat=2):
-            if (symmetry_permutation[s_inv][symmetry_permutation[s]] == np.arange(num_facies)).all():
-                inverse_symmetry[s] = s_inv
-
-        # physically possible permutations of the colors correspond to full cube symmetries
+        # physically possible permutations of the colors correspond to possible orientations of the full cube
         color_permutation = np.zeros((24, 7), dtype=int) # 7 since color enum starts at 1
         
         # get one index in solved state for each color
         color_index = np.array([(solved_state == c).argmax() for c in range(1,7)])
         
-        # extract color permutation from each symmetry permutation
+        # extract color permutation from each orientation
         for sym in range(24):
-            color_permutation[sym,1:] = solved_state[symmetry_permutation[sym]][color_index]
+            color_permutation[sym,1:] = solved_state[orientation_permutation[sym]][color_index]
+
+        # determine symmetry inverses
+        inverse_symmetry = {}
+        for s, s_inv in it.product(range(24), repeat=2):
+            if (color_permutation[s_inv][color_permutation[s]] == np.arange(7)).all():
+                inverse_symmetry[s] = s_inv
 
         # precompute valid action list
         # action format: (rotation_axis, plane_index, num_twists)
         valid_actions = tuple(it.product((0,1,2), range(N), (1,2,3)))
 
         # precompute symmetries of solved state
-        solved_states = solved_state[symmetry_permutation].copy()
+        solved_states = solved_state[orientation_permutation].copy()
 
         # memoize results
         self.N = N
@@ -138,7 +138,7 @@ class CubeDomain:
         self._solved_state = solved_state
         self._solved_states = solved_states
         self._twist_permutation = twist_permutation
-        self._symmetry_permutation = symmetry_permutation
+        self._orientation_permutation = orientation_permutation
         self._inverse_symmetry = inverse_symmetry
         self._color_permutation = color_permutation
         self._valid_actions = valid_actions
@@ -164,16 +164,23 @@ class CubeDomain:
         for action in actions: state = self.perform(action, state)
         return state
 
+    def intermediate_states(self, actions, state):
+        states = []
+        for action in actions:
+            state = self.perform(action, state)
+            states.append(state)
+        return states
+
     def is_solved_in(self, state):
         return (self._solved_states == state).all(axis=1).any()
 
-    def symmetries_of(self, state):
-        return state[self._symmetry_permutation].copy()
+    def orientations_of(self, state):
+        return state[self._orientation_permutation].copy()
 
     def inverse_symmetry_of(self, s):
         return self._inverse_symmetry[s]
 
-    def color_permutations_of(self, state):
+    def recolorings_of(self, state):
         return self._color_permutation.take(state, axis=1)
 
     def reverse(self, actions):
@@ -233,6 +240,12 @@ class CubeDomain:
 
 if __name__ == "__main__":
 
+    def render_at(numrows, numcols, sp, state):
+        ax = pt.subplot(numrows, numcols, sp)
+        domain.render(state, ax, 0, 0)
+        ax.axis("equal")
+        ax.axis('off')
+        return ax
 
     # #### test performing actions
     # domain = CubeDomain(4)
@@ -240,18 +253,10 @@ if __name__ == "__main__":
     # # actions = [(0,0,1)]
     # state = domain.solved_state()
 
-    # ax = pt.subplot(1, len(actions)+1, 1)
-    # domain.render(state, ax, 0, 0)
-    # ax.axis("equal")
-    # ax.axis('off')
-    
+    # render_at(1, len(actions)+1, 1, state)
     # for a, (axis, depth, num) in enumerate(actions):
     #     state = domain.perform((axis, depth, num), state)
-
-    #     ax = pt.subplot(1, len(actions)+1, a+2)
-    #     domain.render(state, ax, 0, 0)
-    #     ax.axis("equal")
-    #     ax.axis('off')
+    #     render_at(1, len(actions)+1, a+2, state)
     
     # pt.show()
 
@@ -259,12 +264,9 @@ if __name__ == "__main__":
     # domain = CubeDomain(3)
     # state = domain.solved_state()
     # # state = domain.perform((0, 0, 1), state)
-    # for s, sym_state in enumerate(domain.symmetries_of(state)):
-    #     ax = pt.subplot(4, 6, s+1)
-    #     domain.render(sym_state, ax, 0, 0)
-    #     ax.axis("equal")
-    #     ax.axis('off')
-    #     ax.set_title(str(s))
+    # for s, sym_state in enumerate(domain.orientations_of(state)):
+    #     ax = render_at(4, 6, s+1, sym_state)
+    #     ax.set_title("%s: %s" % (s, domain._color_permutation[s]))
     # pt.show()
 
     # #### test color permutations
@@ -272,27 +274,134 @@ if __name__ == "__main__":
     # print(domain._color_permutation)
     # state = domain.solved_state()
     # # state = domain.perform((0, 0, 1), state)
-    # for s, sym_state in enumerate(domain.color_permutations_of(state)):
+    # for s, sym_state in enumerate(domain.recolorings_of(state)):
     # # for s in range(24):
     # #     sym_state = domain._color_permutation[s][state]
-    #     ax = pt.subplot(4, 6, s+1)
-    #     domain.render(sym_state, ax, 0, 0)
-    #     ax.axis("equal")
-    #     ax.axis('off')
+    #     ax = render_at(4, 6, s+1, sym_state)
     #     ax.set_title(str(s))
     # pt.show()
 
-    #### test hardest state
+    # #### test hardest state
+    # domain = CubeDomain(3)
+    # path = domain.superflip_path() # from unsolved to solved
+    # # inverted = [a[:2]+(-a[2] % 4,) for a in path[::-1]] # from solved to unsolved
+    # hardest_state = domain.execute(domain.reverse(path), domain.solved_state())
+    # states = [hardest_state]
+    # for action in path: states.append(domain.perform(action, states[-1]))
+    # assert domain.is_solved_in(states[-1])
+
+    # for s, state in enumerate(states): render_at(4, 6, s+1, state)
+    # pt.show()
+
+    # # #### test to confirm that macros are invariant under recoloring conjugation
+    # # i.e. macro(state) = (colsym * macro * inv colsym)(state)
+    # # NOT true for full cube reorientations
+    # # this is relevant to color neutrality of pdb patterns
+    # domain = CubeDomain(3)
+    # valid_actions = tuple(domain.valid_actions())
+
+    # import numpy as np
+    # rng = np.random.default_rng()
+    # macro = rng.choice(valid_actions, size=5)
+    # print(macro)
+
+    # solved = domain.solved_state()
+    # # solved = domain.random_state(10, rng)
+
+    # init = solved
+    # states = domain.intermediate_states(macro, solved)
+    # states = [solved] + states + states[-1:]
+    # for s, state in enumerate(states):
+    #     ax = pt.subplot(4, len(states), s+1)
+    #     domain.render(state, ax, 0, 0)
+    #     ax.axis("equal")
+    #     ax.axis('off')
+
+    # sym = 11
+    # init = domain.orientations_of(solved)[sym]
+    # states = domain.intermediate_states(macro, init)
+    # states = [init] + states + [domain.orientations_of(states[-1])[domain.inverse_symmetry_of(sym)]]
+    # for s, state in enumerate(states):
+    #     ax = render_at(4, len(states), len(states) + s+1, state)
+
+    # init = domain.recolorings_of(solved)[sym]
+    # states = domain.intermediate_states(macro, init)
+    # states = [init] + states + [domain.recolorings_of(states[-1])[domain.inverse_symmetry_of(sym)]]
+    # for s, state in enumerate(states):
+    #     ax = render_at(4, len(states), 2*len(states) + s+1, state)
+
+    # init = domain.orientations_of(solved)[sym]
+    # states = domain.intermediate_states(macro, init)
+    # states = [init] + states + [domain.recolorings_of(states[-1])[domain.inverse_symmetry_of(sym)]]
+    # for s, state in enumerate(states):
+    #     ax = render_at(4, len(states), 3*len(states) + s+1, state)
+
+    # pt.show()
+
+    # # #### test to check whether (orisym, colsym, macro) sequence solves regardless of orisym and colsym
+    # # it does solve (up to orientation) for no intermediate orisyms, but intermediate colsyms allowed
+    # domain = CubeDomain(3)
+    # valid_actions = tuple(domain.valid_actions())
+
+    # import numpy as np
+
+    # solved = domain.solved_state()
+
+    # rng = np.random.default_rng()
+    # scramble = rng.choice(valid_actions, size=9)
+    # scrambled = domain.execute(scramble, solved)
+
+    # scramble = domain.reverse(scramble)
+    # macros = scramble[:3], scramble[3:6], scramble[6:]
+
+    # pt.figure(figsize=(20, 5))
+
+    # states = [scrambled]
+    # for macro in macros:
+    #     for action in macro:
+    #         states.append(domain.perform(action, states[-1]))
+    # for s, state in enumerate(states):
+    #     ax = render_at(2, len(states), s+1, state)
+
+    # states = [scrambled]
+    # for macro in macros:
+    #     orisym, colsym = rng.choice(24, size=2)
+    #     # states[-1] = domain.orientations_of(states[-1])[orisym]
+    #     states[-1] = domain.recolorings_of(states[-1])[colsym]
+    #     for action in macro:
+    #         states.append(domain.perform(action, states[-1]))
+    # for s, state in enumerate(states):
+    #     ax = render_at(2, len(states), len(states) + s+1, state)
+
+    # pt.show()
+
+    # test to confirm that (orisym, colsym) commute
     domain = CubeDomain(3)
-    path = domain.superflip_path() # from unsolved to solved
-    # inverted = [a[:2]+(-a[2] % 4,) for a in path[::-1]] # from solved to unsolved
-    hardest_state = domain.execute(domain.reverse(path), domain.solved_state())
-    states = [hardest_state]
-    for action in path: states.append(domain.perform(action, states[-1]))
-    assert domain.is_solved_in(states[-1])
+    valid_actions = tuple(domain.valid_actions())
+
+    import numpy as np
+    solved = domain.solved_state()
+
+    rng = np.random.default_rng()
+    scramble = rng.choice(valid_actions, size=9)
+    scrambled = domain.execute(scramble, solved)
+
+    pt.figure(figsize=(20, 5))
+
+    orisym, colsym = rng.choice(24, size=2)
+    states = [scrambled]
+    states.append(domain.orientations_of(states[-1])[orisym])
+    states.append(domain.recolorings_of(states[-1])[colsym])
     for s, state in enumerate(states):
-        ax = pt.subplot(4, 6, s+1)
-        domain.render(state, ax, 0, 0)
-        ax.axis("equal")
-        ax.axis('off')
+        ax = render_at(2, len(states), s+1, state)
+    final = states[-1]
+
+    states = [scrambled]
+    states.append(domain.recolorings_of(states[-1])[colsym])
+    states.append(domain.orientations_of(states[-1])[orisym])
+    for s, state in enumerate(states):
+        ax = render_at(2, len(states), len(states) + s+1, state)
+
+    assert (final == states[-1]).all()
+
     pt.show()
