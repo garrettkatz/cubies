@@ -5,8 +5,10 @@ Paths and resulting permutations to each node are precomputed
 import numpy as np
 
 class SearchTree:
-    def __init__(self, domain, max_depth):
-        permutation = np.arange(len(domain.solved_state()))
+
+    def __init__(self, domain, max_depth, orientation_neutral=True, color_neutral=True):
+
+        permutation = np.arange(domain.state_size())
         actions = tuple()
         
         explored = set([permutation.tobytes()])
@@ -21,7 +23,7 @@ class SearchTree:
                     new_actions = actions + (action,)
                     new_permutation = domain.perform(action, permutation)
 
-                    sym_permutations = domain.symmetries_of(new_permutation)
+                    sym_permutations = domain.orientations_of(new_permutation)
                     if not any([perm.tobytes() in explored for perm in sym_permutations]):
                         explored.add(new_permutation.tobytes())
                         layers[depth+1].append((new_actions, new_permutation))

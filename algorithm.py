@@ -12,7 +12,7 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
         
         # Empty macro if problem is solved in descendent state
         if domain.is_solved_in(descendent):
-            sym = (domain.symmetries_of(descendent) == domain.solved_state()).all(axis=1).argmax()
+            sym = (domain.orientations_of(descendent) == domain.solved_state()).all(axis=1).argmax()
             return actions, sym, []
 
         # Non-empty macro if state matches a database pattern
@@ -40,7 +40,7 @@ def run(state, domain, bfs_tree, pattern_database, max_depth, max_macros):
         # Otherwise, execute search result
         actions, sym, macro = result
         for action in actions: state = domain.perform(action, state)
-        state = domain.symmetries_of(state)[sym]
+        state = domain.orientations_of(state)[sym]
         for action in macro: state = domain.perform(action, state)
         plan.append(result)
 
@@ -70,7 +70,7 @@ if __name__ == "__main__":
 
     # state = domain.solved_state()
     # state = domain.perform((0,0,1),state)
-    # state = domain.symmetries_of(state)[2,:]
+    # state = domain.orientations_of(state)[2,:]
     # state = domain.perform((1,0,1),state)
     # result = macro_search(state, domain, bfs_tree, pattern_database, max_depth)
     # if result != False:
@@ -102,15 +102,15 @@ if __name__ == "__main__":
     )
     pattern_database = PatternDatabase(patterns, wildcard, macros, domain)
 
-    matched = pattern_database.query(domain.symmetries_of(patterns[1])[15])
+    matched = pattern_database.query(domain.orientations_of(patterns[1])[15])
     print(matched)
     if matched:
         sym, macro = pattern_database.result()
         print(sym, macro)
 
     # state = domain.perform((1,0,1), patterns[1])
-    state = domain.perform((1,0,1), domain.symmetries_of(patterns[1])[21])
-    # state = domain.symmetries_of(patterns[1])[15]
+    state = domain.perform((1,0,1), domain.orientations_of(patterns[1])[21])
+    # state = domain.orientations_of(patterns[1])[15]
     # state = patterns[1]
     solved, plan = run(state, domain, bfs_tree, pattern_database, max_depth=1, max_macros=2)
     if solved:
@@ -135,7 +135,7 @@ if __name__ == "__main__":
                 state = domain.perform(action, state)
                 draw(state, str(action), i)
                 i += 1
-            state = domain.symmetries_of(state)[sym]
+            state = domain.orientations_of(state)[sym]
             draw(state, str(sym), i)
             i += 1
             for action in macro:

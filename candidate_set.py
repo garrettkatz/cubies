@@ -95,7 +95,7 @@ class CandidateSet:
             pattern_database.reset()
 
         # aggregate miss counts over symmetries
-        perms = self.domain.symmetries_of(np.arange(self.domain.state_size()))
+        perms = self.domain.orientations_of(np.arange(self.domain.state_size()))
         for p in range(len(candidate.patterns)):
             for s in range(24):
                 perm = perms[pattern_database.syms[24*p + s]]
