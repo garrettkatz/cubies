@@ -20,13 +20,27 @@ class SearchTree:
             for actions, permutation in layers[depth]:
                 for action in domain.valid_actions(permutation):
 
+                    # get child state permutation
                     new_actions = actions + (action,)
                     new_permutation = domain.perform(action, permutation)
+                    
+                    # skip if already explored
+                    if new_permutation.tobytes() in explored: continue
+                    
+                    # or if a reorientation already explored and neutral
+                    if orientation_neutral:
+                        orientations = domain.orientations_of(new_permutation)
+                        if any([perm.tobytes() in explored for perm in orientations]): continue
 
-                    sym_permutations = domain.orientations_of(new_permutation)
-                    if not any([perm.tobytes() in explored for perm in sym_permutations]):
-                        explored.add(new_permutation.tobytes())
-                        layers[depth+1].append((new_actions, new_permutation))
+                    # or if a recoloring already explored and neutral
+                    if color_neutral:
+                        # TODO: fix here and cube.py for permuting facie indices instead of color enum
+                        recolorings = domain.recolorings_of(new_permutation)
+                        if any([perm.tobytes() in explored for perm in recolorings]): continue
+
+                    # otherwise add the new state to the frontier and explored set
+                    explored.add(new_permutation.tobytes())
+                    layers[depth+1].append((new_actions, new_permutation))
         
         self._layers = layers
     
