@@ -9,6 +9,8 @@ class PatternDatabase:
         # patterns[i,j]: 1 <= v <= 6 matches specific color in state
         # patterns[i,j] need not match if wildcard[i,j] == 1
 
+        self.orientation_neutral = orientation_neutral
+
         if orientation_neutral:
             # expand db with rotational symmetries
             self.patterns = np.empty((24*len(patterns), domain.state_size()), dtype=int)
@@ -26,7 +28,7 @@ class PatternDatabase:
         else:
             self.patterns = np.array(patterns)
             self.wildcard = np.array(wildcard)
-            self.macros = list(self.macros)
+            self.macros = list(macros)
             self.syms = [0] * len(patterns)
 
         # initialize matches and traces
@@ -39,7 +41,8 @@ class PatternDatabase:
         self.matched = False
 
         # trace query history
-        self.match_counts = np.zeros(len(self.patterns) // 24, dtype=int) # aggregates across symmetry
+        sym_mod = 24 if self.orientation_neutral else 1
+        self.match_counts = np.zeros(len(self.patterns) // sym_mod, dtype=int) # aggregates across symmetry
         self.miss_counts = np.zeros(self.patterns.shape, dtype=int)
         self.num_queries = 0
 
@@ -58,7 +61,8 @@ class PatternDatabase:
         # update trace
         if self.match_index.size > 0:
             idx = self.match_index[0]
-            self.match_counts[idx // 24] += 1
+            sym_mod = 24 if self.orientation_neutral else 1
+            self.match_counts[idx // sym_mod] += 1
             self.miss_counts[:idx] += ~hits[:idx]
         else:
             self.miss_counts += ~hits

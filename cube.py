@@ -5,9 +5,9 @@ first 3 dimensions are positions on the cube
 last dimension is the colors in each spatial direction
 spatial directions are 0:x, 1:y, 2:z
 """
+import itertools as it
 import numpy as np
 import matplotlib.pyplot as pt
-import itertools as it
 from matplotlib.patches import Polygon
 
 # Set up color enum and rgb tuples
@@ -238,14 +238,14 @@ class CubeDomain:
                 ax.add_patch(Polygon(xy, facecolor=c, edgecolor='k'))
             ax.text((N+.1)*axes[0,d], (N+.1)*axes[1,d], str(d))
 
-if __name__ == "__main__":
-
-    def render_at(numrows, numcols, sp, state):
+    def render_subplot(self, numrows, numcols, sp, state):
         ax = pt.subplot(numrows, numcols, sp)
-        domain.render(state, ax, 0, 0)
+        self.render(state, ax, 0, 0)
         ax.axis("equal")
         ax.axis('off')
         return ax
+
+if __name__ == "__main__":
 
     # #### test performing actions
     # domain = CubeDomain(4)
@@ -253,10 +253,10 @@ if __name__ == "__main__":
     # # actions = [(0,0,1)]
     # state = domain.solved_state()
 
-    # render_at(1, len(actions)+1, 1, state)
+    # domain.render_subplot(1, len(actions)+1, 1, state)
     # for a, (axis, depth, num) in enumerate(actions):
     #     state = domain.perform((axis, depth, num), state)
-    #     render_at(1, len(actions)+1, a+2, state)
+    #     domain.render_subplot(1, len(actions)+1, a+2, state)
     
     # pt.show()
 
@@ -265,7 +265,7 @@ if __name__ == "__main__":
     # state = domain.solved_state()
     # # state = domain.perform((0, 0, 1), state)
     # for s, sym_state in enumerate(domain.orientations_of(state)):
-    #     ax = render_at(4, 6, s+1, sym_state)
+    #     ax = domain.render_subplot(4, 6, s+1, sym_state)
     #     ax.set_title("%s: %s" % (s, domain._color_permutation[s]))
     # pt.show()
 
@@ -277,7 +277,7 @@ if __name__ == "__main__":
     # for s, sym_state in enumerate(domain.recolorings_of(state)):
     # # for s in range(24):
     # #     sym_state = domain._color_permutation[s][state]
-    #     ax = render_at(4, 6, s+1, sym_state)
+    #     ax = domain.render_subplot(4, 6, s+1, sym_state)
     #     ax.set_title(str(s))
     # pt.show()
 
@@ -290,7 +290,7 @@ if __name__ == "__main__":
     # for action in path: states.append(domain.perform(action, states[-1]))
     # assert domain.is_solved_in(states[-1])
 
-    # for s, state in enumerate(states): render_at(4, 6, s+1, state)
+    # for s, state in enumerate(states): domain.render_subplot(4, 6, s+1, state)
     # pt.show()
 
     # # #### test to confirm that macros are invariant under recoloring conjugation
@@ -322,19 +322,19 @@ if __name__ == "__main__":
     # states = domain.intermediate_states(macro, init)
     # states = [init] + states + [domain.orientations_of(states[-1])[domain.inverse_symmetry_of(sym)]]
     # for s, state in enumerate(states):
-    #     ax = render_at(4, len(states), len(states) + s+1, state)
+    #     ax = domain.render_subplot(4, len(states), len(states) + s+1, state)
 
     # init = domain.recolorings_of(solved)[sym]
     # states = domain.intermediate_states(macro, init)
     # states = [init] + states + [domain.recolorings_of(states[-1])[domain.inverse_symmetry_of(sym)]]
     # for s, state in enumerate(states):
-    #     ax = render_at(4, len(states), 2*len(states) + s+1, state)
+    #     ax = domain.render_subplot(4, len(states), 2*len(states) + s+1, state)
 
     # init = domain.orientations_of(solved)[sym]
     # states = domain.intermediate_states(macro, init)
     # states = [init] + states + [domain.recolorings_of(states[-1])[domain.inverse_symmetry_of(sym)]]
     # for s, state in enumerate(states):
-    #     ax = render_at(4, len(states), 3*len(states) + s+1, state)
+    #     ax = domain.render_subplot(4, len(states), 3*len(states) + s+1, state)
 
     # pt.show()
 
@@ -361,7 +361,7 @@ if __name__ == "__main__":
     #     for action in macro:
     #         states.append(domain.perform(action, states[-1]))
     # for s, state in enumerate(states):
-    #     ax = render_at(2, len(states), s+1, state)
+    #     ax = domain.render_subplot(2, len(states), s+1, state)
 
     # states = [scrambled]
     # for macro in macros:
@@ -371,7 +371,7 @@ if __name__ == "__main__":
     #     for action in macro:
     #         states.append(domain.perform(action, states[-1]))
     # for s, state in enumerate(states):
-    #     ax = render_at(2, len(states), len(states) + s+1, state)
+    #     ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
 
     # pt.show()
 
@@ -393,14 +393,14 @@ if __name__ == "__main__":
     states.append(domain.orientations_of(states[-1])[orisym])
     states.append(domain.recolorings_of(states[-1])[colsym])
     for s, state in enumerate(states):
-        ax = render_at(2, len(states), s+1, state)
+        ax = domain.render_subplot(2, len(states), s+1, state)
     final = states[-1]
 
     states = [scrambled]
     states.append(domain.recolorings_of(states[-1])[colsym])
     states.append(domain.orientations_of(states[-1])[orisym])
     for s, state in enumerate(states):
-        ax = render_at(2, len(states), len(states) + s+1, state)
+        ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
 
     assert (final == states[-1]).all()
 

@@ -173,13 +173,3 @@ if __name__ == "__main__":
 
     # pt.show()
 
-    #### test simplistic method to generate complete and correct macro set for tree
-    # for every tree state a rule's trigger matches, its macro must match leading actions towards solved
-    max_depth = 2
-    # init = domain.random_state(20, np.random.default_rng())
-    init = domain.solved_state()
-    tree = SearchTree(domain, max_depth)
-    actions, states = zip(*tree.rooted_at(init))
-    states = np.array(states)
-    print(states.shape)
-        
