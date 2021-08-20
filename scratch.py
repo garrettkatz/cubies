@@ -34,16 +34,21 @@ if __name__ == "__main__":
     #     print(a, n, s)
 
 
-    #### test simplistic method to generate complete and correct macro set for tree
-    # for every tree state a rule's trigger matches, its macro must match leading actions towards solved
-    # no state should trigger more than one rule? and with max depth 0, every state should trigger at least one
+    #### test simplistic method to generate correct macro set for tree
     # interesting discovery: matched macros can accidentally reverse the work of macro_search, causing infinite loop
-    # results for unoptimized, simplistic random but correct method:
+    # conditions for correctness:
+    #   every state within max_depth of triggering a rule or solving the cube
+    #   every macro has length strictly greater than max_depth
+    #   every macro is leading portion of optimal path to solved for every state that triggers it
+    # factors influencing optimality:
+    #   macro length should tend to be substantially larger than max_depth
 
+    # config
     tree_depth = 3
     max_depth = 0
-    cube_size = 3
+    cube_size = 2
     max_actions = 30
+    orientation_neutral=False
 
     import numpy as np
 
@@ -52,86 +57,75 @@ if __name__ == "__main__":
     init = domain.solved_state()
 
     from tree import SearchTree
-    tree = SearchTree(domain, tree_depth)
+    tree = SearchTree(domain, tree_depth, orientation_neutral)
     paths, states = zip(*tree.rooted_at(init))
     states = np.array(states)
-    num_rulers = np.zeros(len(states))
-    num_rulers[0] = 1 # consider the solved state ruled
     state_index = {states[s].tobytes(): s for s in range(len(states))}
+    num_rulers = np.zeros(len(states))
+    num_rulers[0] = 1 # solved state is ruled
 
-    # unruly = set([s for s in range(len(states)) if len(paths[s]) > max_depth])
     patterns = []
     wildcards = []
     macros = []
+    
+    # pseudocode:
+    # while some states are unprocessed:
+    #     nondet choose next state for processing
+    #     if state within max_depth of triggering a rule or solve, continue
+    #     nondet choose macro = leading portion of opt path from state to solve, length strictly greater than maxdepth
+    #     classify all states into those whose leading optimal paths match macro (A), and those who don't (B)
+    #     nondet choose wildcard possibility that triggers current state and none of (B)
+    #     add state, wildcard, and macro to ruleset
+    
+    unprocessed = set(np.random.permutation(range(len(states))))
+    while len(unprocessed) > 0:
 
-    def macro_match(macro, path):
-        # for hi in range(len(path)-max_depth, len(path)+1):
-        #     if macro == path[hi-len(macro):hi]: return True
-        # return False
-        return macro == path[-len(macro):]
+        print("%d of %d states done, |rules| = %d" % (len(states) - len(unprocessed), len(states), len(patterns)))
 
-    # goal of algorithm: each state is within max_depth of triggering a rule, and no state triggers more than one rule
-
-    # while len(unruly) > 0:
-    #     s = unruly.pop()
-    #     print("|unruly| = %d (%d states total), |rules| = %d" % (len(unruly), len(states), len(patterns)))
-    for k,s in enumerate(range(len(states))):
-    # for k,s in enumerate(np.random.permutation(range(len(states)))):
-        print("state %d of %d, |rules| = %d" % (k, len(states), len(patterns)))
-
-
-        # if state is within max_depth of tree_depth, skip it
-        # otherwise macro_search could exit set where pdb is correct
-        if len(paths[s]) + max_depth > tree_depth: continue
-
-        # if state is within max_depth of triggering a rule, skip it
-        for _, other_state in tree.rooted_at(states[s], up_to_depth=max_depth):
-            if other_state.tobytes() in state_index:
-                os = state_index[other_state.tobytes()]
-                if num_rulers[os] > 0: break
-        if num_rulers[os] > 0: continue
-
-        # macro length should be strictly greater than max_depth to reduce chance of loops
-        ln = np.random.randint(min(max_depth+1, len(paths[s])), len(paths[s])+1)
-        # hi = np.random.randint(max(ln, len(paths[s])-max_depth), len(paths[s])+1)
-        hi = len(paths[s]) # new macro starting from this state
-        lo = hi - ln
-        macro = paths[s][lo:hi]
-
+        # nondet choose next state for processing
+        s = unprocessed.pop()
         pattern = states[s]
+
+        # if state within max_depth of triggering a rule or solve, continue
+        # due to incomplete tree it must also be ruled within distance to tree_depth
+        # otherwise macro_search could exit set where pdb is correct
+        near_rule = False
+        rule_depth = min(max_depth, tree_depth - len(paths[s]))
+        for path, neighbor in tree.rooted_at(pattern, up_to_depth=rule_depth):
+            if orientation_neutral:
+                for oriented in domain.orientations_of(neighbor):
+                    if oriented.tobytes() in state_index:
+                        near_rule = (num_rulers[state_index[oriented.tobytes()]] > 0)
+                        if near_rule: break
+            # elif neighbor.tobytes() in state_index:
+            else:
+                near_rule = (num_rulers[state_index[neighbor.tobytes()]] > 0)
+            if near_rule: break
+        if near_rule: continue
+
+        # nondet choose macro = leading portion of opt path from state, len(macro) > max_depth
+        lo = np.random.randint(len(paths[s]) - max_depth)
+        macro = paths[s][lo:]
+        # macro = paths[s]
+
+        # classify all states into those whose leading optimal paths match macro, and those who don't
+        matched_macro = np.zeros(len(states), dtype=bool)
+        for m in range(len(states)):
+            matched_macro[m] = (len(paths[m]) >= len(macro)) and (macro == paths[m][-len(macro):])
+
+        # nondet choose wildcard possibility that triggers current state and none whose optimal paths don't match
         wildcard = np.zeros(len(pattern), dtype=bool)
-
-        grounded = np.random.permutation(range(domain.state_size()))
-        for i in grounded:
+        ordering = np.random.permutation(range(domain.state_size()))
+        for i in ordering:
             wildcard[i] = True
-            matched = ((states == pattern) | wildcard).all(axis=1)
-            for m in np.flatnonzero(matched):
-                if not macro_match(macro, paths[m]) or num_rulers[m] > 0:
-                    wildcard[i] = False
-                    break
-        # for i in range(domain.state_size()):
-        #     grounded = np.flatnonzero(~wildcard)
-        #     matchcounts = np.zeros(len(grounded))
-        #     for w,j in enumerate(grounded):
-        #         wildcard[j] = True
-        #         matched = ((states == pattern) | wildcard).all(axis=1)
-        #         for m in np.flatnonzero(matched):
-        #             if not macro_match(macro, paths[m]) or num_rulers[m] > 0:
-        #                 wildcard[j] = False
-        #                 break
-        #         if wildcard[j]: matchcounts[w] = matched.sum()
-        #         wildcard[j] = False
-        #     if (matchcounts > 0).any():
-        #         w = np.argmax(matchcounts)
-        #         j = grounded[w]
-        #         wildcard[j] = True
-        #     else:
-        #         break
+            triggered = ((states == pattern) | wildcard).all(axis=1)
+            if (triggered & ~matched_macro).any(): wildcard[i] = False
 
+        # updated ruled status
         matched = ((states == pattern) | wildcard).all(axis=1)
         num_rulers[matched] += 1
-        # unruly -= set(np.flatnonzero(matched))
 
+        # add state, wildcard, and macro to ruleset
         patterns.append(pattern)
         wildcards.append(wildcard)
         macros.append(domain.reverse(macro))
@@ -146,7 +140,7 @@ if __name__ == "__main__":
 
     # confirm correctness
     from pattern_database import PatternDatabase
-    pdb = PatternDatabase(patterns, wildcards, macros, domain, orientation_neutral=False)
+    pdb = PatternDatabase(patterns, wildcards, macros, domain, orientation_neutral)
 
     from algorithm import run
     import matplotlib.pyplot as pt
@@ -155,9 +149,10 @@ if __name__ == "__main__":
     opt_moves = []
     alg_moves = []
     for p, (path, prob_state) in enumerate(tree.rooted_at(init)):
-        if len(path) + max_depth > tree_depth: continue # otherwise macro_search could exit set where pdb is correct
+        # if len(path) + max_depth > tree_depth: continue # otherwise macro_search could exit set where pdb is correct
         num_checked += 1
-        # print("checked %d" % (num_checked))
+        if p % (10**int(np.log10(p+1))) == 0: print("checked %d" % (num_checked))
+
         solved, plan = run(prob_state, domain, tree, pdb, max_depth, max_actions)
         state = prob_state
         for (actions, sym, macro) in plan:
