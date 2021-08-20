@@ -77,7 +77,7 @@ class CubeDomain:
             twist_permutation[0, p, 1] = permuted.flat[face_index]
             # roty
             permuted = cube_index.copy()
-            permuted[:,p,:,:] = np.rot90(permuted[:,p,:,:], axes=(0,1))
+            permuted[:,p,:,:] = np.rot90(permuted[:,p,:,:], axes=(1,0))
             permuted[:,p,:,(2,0)] = permuted[:,p,:,(0,2)]
             twist_permutation[1, p, 1] = permuted.flat[face_index]
             # rotz
@@ -89,6 +89,10 @@ class CubeDomain:
         for a, p, n in it.product((0,1,2), range(N), (2, 3, 4)):
             twist_permutation[a, p, n % 4] = twist_permutation[a, p, n-1][twist_permutation[a, p, 1]]
 
+        # precompute valid action list
+        # action format: (rotation_axis, plane_index, num_twists)
+        valid_actions = tuple(it.product((0,1,2), range(N), (1,2,3)))
+
         # orientations of the full cube are also computed via state permutations
         orientation_permutation = np.empty((24, num_facies), dtype=int)
 
@@ -99,15 +103,39 @@ class CubeDomain:
                 state = state[twist_permutation[axis, plane, num_twists % 4]]
             return state
 
-        # compute symmetry permutations
+        # reorientation also permutes valid actions
+        action_permutation = []
+
+        # helper function to rotate all actions around a given axis
+        def rotate_all_actions(actions, axis, num_twists):
+            actions = list(actions)
+            mod2 = num_twists % 2
+            mod4 = num_twists % 4
+            for k, (a, p, t) in enumerate(actions):
+                if (axis, a) == (0, 1): actions[k] = ([1, 2][mod2], [p, p, N-1-p, N-1-p][mod4], [+t, +t, -t, -t][mod4] % 4)
+                if (axis, a) == (0, 2): actions[k] = ([2, 1][mod2], [p, N-1-p, N-1-p, p][mod4], [+t, -t, -t, +t][mod4] % 4)
+                if (axis, a) == (1, 2): actions[k] = ([2, 0][mod2], [p, p, N-1-p, N-1-p][mod4], [+t, +t, -t, -t][mod4] % 4)
+                if (axis, a) == (1, 0): actions[k] = ([0, 2][mod2], [p, N-1-p, N-1-p, p][mod4], [+t, -t, -t, +t][mod4] % 4)
+                if (axis, a) == (2, 0): actions[k] = ([0, 1][mod2], [p, p, N-1-p, N-1-p][mod4], [+t, +t, -t, -t][mod4] % 4)
+                if (axis, a) == (2, 1): actions[k] = ([1, 0][mod2], [p, N-1-p, N-1-p, p][mod4], [+t, -t, -t, +t][mod4] % 4)
+            return actions
+
+        # compute reorientation permutations
         for s, (axis, direction, num_twists) in enumerate(it.product((2,0,1), (1,-1), (0,1,2,3))):
             # align top face with one of six directed axes
-            permuted = np.arange(num_facies)
-            if axis != 2: permuted = rotate_all_planes(permuted, 1-axis, direction)
-            elif direction != 1: permuted = rotate_all_planes(permuted, 0, 2)
+            permuted_facies = np.arange(num_facies)
+            permuted_actions = list(valid_actions)
+            if axis != 2:
+                permuted_facies = rotate_all_planes(permuted_facies, 1-axis, direction)
+                permuted_actions = rotate_all_actions(permuted_actions, 1-axis, direction)
+            elif direction != 1:
+                permuted_facies = rotate_all_planes(permuted_facies, 0, 2)
+                permuted_actions = rotate_all_actions(permuted_actions, 0, 2)
             # rotate cube around directed axis
-            permuted = rotate_all_planes(permuted, axis, num_twists)
-            orientation_permutation[s] = permuted
+            permuted_facies = rotate_all_planes(permuted_facies, axis, num_twists)
+            orientation_permutation[s] = permuted_facies
+            permuted_actions = rotate_all_actions(permuted_actions, axis, num_twists)
+            action_permutation.append({valid_actions[k]: permuted_actions[k] for k in range(len(valid_actions))})
 
         # physically possible permutations of the colors correspond to possible orientations of the full cube
         color_permutation = np.zeros((24, 7), dtype=int) # 7 since color enum starts at 1
@@ -125,10 +153,6 @@ class CubeDomain:
             if (color_permutation[s_inv][color_permutation[s]] == np.arange(7)).all():
                 inverse_symmetry[s] = s_inv
 
-        # precompute valid action list
-        # action format: (rotation_axis, plane_index, num_twists)
-        valid_actions = tuple(it.product((0,1,2), range(N), (1,2,3)))
-
         # precompute symmetries of solved state
         solved_states = solved_state[orientation_permutation].copy()
 
@@ -139,6 +163,7 @@ class CubeDomain:
         self._solved_states = solved_states
         self._twist_permutation = twist_permutation
         self._orientation_permutation = orientation_permutation
+        self._action_permutation = action_permutation
         self._inverse_symmetry = inverse_symmetry
         self._color_permutation = color_permutation
         self._valid_actions = valid_actions
@@ -177,6 +202,9 @@ class CubeDomain:
     def orientations_of(self, state):
         return state[self._orientation_permutation].copy()
 
+    def reoriented_actions(self, sym):
+        return dict(self._action_permutation[sym])
+
     def inverse_symmetry_of(self, s):
         return self._inverse_symmetry[s]
 
@@ -190,8 +218,8 @@ class CubeDomain:
         # from https://www.cube20.org
         path = "R L U2 F U' D F2 R2 B2 L U2 F' B' U R2 D F2 U R2 U"
         action_map = {
-            "U": (1, 0, 3),
-            "D": (1, self.N-1, 1),
+            "U": (1, 0, 1),
+            "D": (1, self.N-1, 3),
             "L": (2, self.N-1, 3),
             "R": (2, 0, 1),
             "F": (0, 0, 1),
@@ -202,8 +230,8 @@ class CubeDomain:
             "R2": (2, 0, 2),
             "F2": (0, 0, 2),
             "B2": (0, self.N-1, 2),
-            "U'": (1, 0, 1),
-            "D'": (1, self.N-1, 3),
+            "U'": (1, 0, 3),
+            "D'": (1, self.N-1, 1),
             "L'": (2, self.N-1, 1),
             "R'": (2, 0, 3),
             "F'": (0, 0, 3),
@@ -260,6 +288,18 @@ if __name__ == "__main__":
     
     # pt.show()
 
+    # #### test right-handedness of each action (visual inspect)
+    # pt.figure(figsize=(20,10))
+    # domain = CubeDomain(3)
+    # solved = domain.solved_state()
+    # domain.render_subplot(7, 7, 1, solved)
+    # for a, (axis, plane, num) in enumerate(domain.valid_actions()):
+    #     state = domain.perform((axis, plane, num), solved)
+    #     ax = domain.render_subplot(7, 7, a+2, state)
+    #     ax.set_title(str((axis, plane, num)))
+    # pt.tight_layout()
+    # pt.show()
+
     # #### test symmetries
     # domain = CubeDomain(3)
     # state = domain.solved_state()
@@ -289,7 +329,6 @@ if __name__ == "__main__":
     # states = [hardest_state]
     # for action in path: states.append(domain.perform(action, states[-1]))
     # assert domain.is_solved_in(states[-1])
-
     # for s, state in enumerate(states): domain.render_subplot(4, 6, s+1, state)
     # pt.show()
 
@@ -375,7 +414,38 @@ if __name__ == "__main__":
 
     # pt.show()
 
-    # test to confirm that (orisym, colsym) commute
+    # #### test to confirm that (orisym, colsym) commute
+    # domain = CubeDomain(3)
+    # valid_actions = tuple(domain.valid_actions())
+
+    # import numpy as np
+    # solved = domain.solved_state()
+
+    # rng = np.random.default_rng()
+    # scramble = rng.choice(valid_actions, size=9)
+    # scrambled = domain.execute(scramble, solved)
+
+    # pt.figure(figsize=(20, 5))
+
+    # orisym, colsym = rng.choice(24, size=2)
+    # states = [scrambled]
+    # states.append(domain.orientations_of(states[-1])[orisym])
+    # states.append(domain.recolorings_of(states[-1])[colsym])
+    # for s, state in enumerate(states):
+    #     ax = domain.render_subplot(2, len(states), s+1, state)
+    # final = states[-1]
+
+    # states = [scrambled]
+    # states.append(domain.recolorings_of(states[-1])[colsym])
+    # states.append(domain.orientations_of(states[-1])[orisym])
+    # for s, state in enumerate(states):
+    #     ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
+
+    # assert (final == states[-1]).all()
+
+    # pt.show()
+
+    #### test reoriented actions
     domain = CubeDomain(3)
     valid_actions = tuple(domain.valid_actions())
 
@@ -383,25 +453,33 @@ if __name__ == "__main__":
     solved = domain.solved_state()
 
     rng = np.random.default_rng()
-    scramble = rng.choice(valid_actions, size=9)
-    scrambled = domain.execute(scramble, solved)
+    scramble = [tuple(a) for a in rng.choice(valid_actions, size=1)]
+    # scramble = [(2, 2, 2)]
 
-    pt.figure(figsize=(20, 5))
+    for orisym in range(24):
+    # for orisym in [8]:    
 
-    orisym, colsym = rng.choice(24, size=2)
-    states = [scrambled]
-    states.append(domain.orientations_of(states[-1])[orisym])
-    states.append(domain.recolorings_of(states[-1])[colsym])
-    for s, state in enumerate(states):
-        ax = domain.render_subplot(2, len(states), s+1, state)
-    final = states[-1]
+        states = [solved] + domain.intermediate_states(scramble, solved)    
 
-    states = [scrambled]
-    states.append(domain.recolorings_of(states[-1])[colsym])
-    states.append(domain.orientations_of(states[-1])[orisym])
-    for s, state in enumerate(states):
-        ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
+        action_map = domain.reoriented_actions(orisym)    
+        ori_solved = domain.orientations_of(solved)[orisym]
+        ori_scramble = [action_map[a] for a in scramble]
+        ori_states = [ori_solved] + domain.intermediate_states(ori_scramble, ori_solved)
 
-    assert (final == states[-1]).all()
+        if not (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all():
 
-    pt.show()
+            pt.figure(figsize=(20, 5))
+
+            for s, state in enumerate(states):
+                ax = domain.render_subplot(2, len(states), s+1, state)
+                if s > 0: ax.set_title(str(scramble[s-1]))
+
+            for s, state in enumerate(ori_states):
+                ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
+                if s > 0: ax.set_title(str(ori_scramble[s-1]))
+                else: ax.set_title(str(orisym))
+
+            pt.show()
+
+        assert (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all()
+
