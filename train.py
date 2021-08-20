@@ -182,7 +182,7 @@ if __name__ == "__main__":
     num_instances = 256
     tree_depth = 3
     max_depth = 1
-    max_macros = 5
+    max_actions = 20
     num_patterns = 32
     min_macro_size = 1
     max_macro_size = 5
@@ -224,7 +224,7 @@ if __name__ == "__main__":
     from candidate_set import CandidateSet
     candidate_set = CandidateSet(
         domain, bfs_tree, rng, min_macro_size, max_macro_size, wildcard_rate, rollout_length,
-        num_patterns, num_instances, max_depth, max_macros)
+        num_patterns, num_instances, max_depth, max_actions)
 
     def evaluate_fun(candidate):
         candidate, objectives = candidate_set.evaluate(candidate)

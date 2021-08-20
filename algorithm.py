@@ -22,14 +22,15 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
     # Failure if no path to macro found
     return False
 
-def run(state, domain, bfs_tree, pattern_database, max_depth, max_macros):
+def run(state, domain, bfs_tree, pattern_database, max_depth, max_actions):
     # returns solved, plan
     # solved: True if path to solved state was found, False otherwise
     # plan: [...,(actions, sym index, macro),...] a sequence of macro_search results
     
     # Form plan one macro at a time
     plan = []
-    for num_macros in range(max_macros):
+    num_actions = 0
+    while True:
 
         # Search for next macro
         result = macro_search(state, domain, bfs_tree, pattern_database, max_depth)
@@ -37,8 +38,12 @@ def run(state, domain, bfs_tree, pattern_database, max_depth, max_macros):
         # Return failure if none found
         if result is False: return False, plan
         
-        # Otherwise, execute search result
+        # Or if max actions exceeded
         actions, sym, macro = result
+        num_actions += max(len(actions) + len(macro), 1) # make sure count always increases
+        if num_actions > max_actions: return False, plan
+        
+        # Otherwise, execute search result
         for action in actions: state = domain.perform(action, state)
         state = domain.orientations_of(state)[sym]
         for action in macro: state = domain.perform(action, state)
@@ -46,9 +51,6 @@ def run(state, domain, bfs_tree, pattern_database, max_depth, max_macros):
 
         # Terminate once solved
         if domain.is_solved_in(state): return True, plan
-    
-    # At this point, no successful plan was found
-    return False, plan
 
 if __name__ == "__main__":
 
@@ -112,7 +114,7 @@ if __name__ == "__main__":
     state = domain.perform((1,0,1), domain.orientations_of(patterns[1])[21])
     # state = domain.orientations_of(patterns[1])[15]
     # state = patterns[1]
-    solved, plan = run(state, domain, bfs_tree, pattern_database, max_depth=1, max_macros=2)
+    solved, plan = run(state, domain, bfs_tree, pattern_database, max_depth=1, max_actions=20)
     if solved:
 
         import matplotlib.pyplot as pt

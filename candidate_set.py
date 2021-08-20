@@ -20,7 +20,7 @@ class Candidate:
 
 class CandidateSet:
 
-    def __init__(self, domain, bfs_tree, rng, min_macro_size, max_macro_size, wildcard_rate, rollout_length, num_patterns, num_instances, max_depth, max_macros):
+    def __init__(self, domain, bfs_tree, rng, min_macro_size, max_macro_size, wildcard_rate, rollout_length, num_patterns, num_instances, max_depth, max_actions):
         self.domain = domain
         self.bfs_tree = bfs_tree
         self.rng = rng
@@ -31,7 +31,7 @@ class CandidateSet:
         self.num_patterns = num_patterns
         self.num_instances = num_instances
         self.max_depth = max_depth
-        self.max_macros = max_macros
+        self.max_actions = max_actions
 
     def sample_macro(self):
         macro_size = self.rng.integers(self.min_macro_size, self.max_macro_size, endpoint=True)
@@ -79,7 +79,7 @@ class CandidateSet:
             # Run algorithm on instance
             candidate.scramble_counts[i] = self.rng.integers(1, self.rollout_length, endpoint=True)
             state = self.domain.random_state(candidate.scramble_counts[i], self.rng)
-            solved, plan = run(state, self.domain, self.bfs_tree, pattern_database, self.max_depth, self.max_macros)
+            solved, plan = run(state, self.domain, self.bfs_tree, pattern_database, self.max_depth, self.max_actions)
             candidate.successes[i] = solved
 
             # Record plan length and macro count
@@ -250,7 +250,7 @@ class CandidateSet:
                 state = self.domain.perform(action, state)
                 self.domain.render(state, axs[p,m+1], x0=0, y0=0)
                 axs[p,m+1].set_title(str(action))
-            for m in range(self.max_macros+1):
+            for m in range(len(candidate.macros[p])+1):
                 axs[p,m].axis("equal")
                 axs[p,m].axis('off')
         axs[0,0].set_title("Patterns")
@@ -263,7 +263,7 @@ if __name__ == "__main__":
     num_instances = 512
     tree_depth = 3
     max_depth = 1
-    max_macros = 5
+    max_actions = 20
     num_patterns = 32
     min_macro_size = 1
     max_macro_size = 5
@@ -281,7 +281,7 @@ if __name__ == "__main__":
 
     candidate_set = CandidateSet(
         domain, bfs_tree, rng, min_macro_size, max_macro_size, wildcard_rate, rollout_length,
-        num_patterns, num_instances, max_depth, max_macros)
+        num_patterns, num_instances, max_depth, max_actions)
 
     candidate, objectives = candidate_set.evaluate(candidate_set.spawn())
     pattern_size, macro_size, godly_solves = objectives

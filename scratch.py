@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # num_action = []
     # was_solved = []
     # for state in states:
-    #     solved, plan = run(state, domain, bfs_tree, pattern_database, max_depth=4, max_macros=5)
+    #     solved, plan = run(state, domain, bfs_tree, pattern_database, max_depth=4, max_actions=10)
     #     was_solved.append(solved)
     #     num_action.append(sum([len(a)+len(m) for (a,_,m) in plan]))
     
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     for p, (path, prob_state) in enumerate(tree.rooted_at(init)):
         if len(path) == tree_depth: continue # otherwise macro_search could exit set where pdb is correct
         # print("checking %d" % (p))
-        solved, plan = run(prob_state, domain, tree, pdb, max_depth, max_macros=10)
+        solved, plan = run(prob_state, domain, tree, pdb, max_depth, max_actions=10)
         state = prob_state
         for (actions, sym, macro) in plan:
             state = domain.execute(actions, state)
