@@ -42,8 +42,9 @@ class SearchTree:
             for actions, permutation in self._layers[depth]:
                 yield actions, permutation
 
-    def rooted_at(self, state):
-        for depth in range(len(self._layers)):
+    def rooted_at(self, state, up_to_depth=None):
+        if up_to_depth is None: up_to_depth = len(self._layers)-1
+        for depth in range(up_to_depth+1):
             for actions, permutation in self._layers[depth]:
                 yield actions, state[permutation]
 
