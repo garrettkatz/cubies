@@ -23,7 +23,7 @@ _colors = {
 
 class CubeDomain:
 
-    def __init__(self, N):
+    def __init__(self, N, valid_actions=None):
         # N is side-length of cube
         
         # Count cubies and facies
@@ -89,9 +89,12 @@ class CubeDomain:
         for a, p, n in it.product((0,1,2), range(N), (2, 3, 4)):
             twist_permutation[a, p, n % 4] = twist_permutation[a, p, n-1][twist_permutation[a, p, 1]]
 
-        # precompute valid action list
+        # precompute valid action list if not provided
         # action format: (rotation_axis, plane_index, num_twists)
-        valid_actions = tuple(it.product((0,1,2), range(N), (1,2,3)))
+        if valid_actions is None:
+            valid_actions = tuple(it.product((0,1,2), range(N), (1,2,3)))
+        else:
+            valid_actions = tuple(valid_actions)
 
         # orientations of the full cube are also computed via state permutations
         orientation_permutation = np.empty((24, num_facies), dtype=int)
@@ -288,6 +291,15 @@ if __name__ == "__main__":
     
     # pt.show()
 
+    #### test valid_action input (only twist plane 1 in each axis)
+    domain = CubeDomain(2, it.product((0,1,2), (1,), (0, 1, 2, 3)))
+    for a, (axis, plane, num) in enumerate(domain.valid_actions()):
+        state = domain.perform((axis, plane, num), domain.solved_state())
+        domain.render_subplot(3, 4, a+1, state)
+    
+    pt.show()
+
+
     # #### test right-handedness of each action (visual inspect)
     # pt.figure(figsize=(20,10))
     # domain = CubeDomain(3)
@@ -445,41 +457,41 @@ if __name__ == "__main__":
 
     # pt.show()
 
-    #### test reoriented actions
-    domain = CubeDomain(3)
-    valid_actions = tuple(domain.valid_actions())
+    # #### test reoriented actions
+    # domain = CubeDomain(3)
+    # valid_actions = tuple(domain.valid_actions())
 
-    import numpy as np
-    solved = domain.solved_state()
+    # import numpy as np
+    # solved = domain.solved_state()
 
-    rng = np.random.default_rng()
-    scramble = [tuple(a) for a in rng.choice(valid_actions, size=1)]
-    # scramble = [(2, 2, 2)]
+    # rng = np.random.default_rng()
+    # scramble = [tuple(a) for a in rng.choice(valid_actions, size=1)]
+    # # scramble = [(2, 2, 2)]
 
-    for orisym in range(24):
-    # for orisym in [8]:    
+    # for orisym in range(24):
+    # # for orisym in [8]:    
 
-        states = [solved] + domain.intermediate_states(scramble, solved)    
+    #     states = [solved] + domain.intermediate_states(scramble, solved)    
 
-        action_map = domain.reoriented_actions(orisym)    
-        ori_solved = domain.orientations_of(solved)[orisym]
-        ori_scramble = [action_map[a] for a in scramble]
-        ori_states = [ori_solved] + domain.intermediate_states(ori_scramble, ori_solved)
+    #     action_map = domain.reoriented_actions(orisym)    
+    #     ori_solved = domain.orientations_of(solved)[orisym]
+    #     ori_scramble = [action_map[a] for a in scramble]
+    #     ori_states = [ori_solved] + domain.intermediate_states(ori_scramble, ori_solved)
 
-        if not (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all():
+    #     if not (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all():
 
-            pt.figure(figsize=(20, 5))
+    #         pt.figure(figsize=(20, 5))
 
-            for s, state in enumerate(states):
-                ax = domain.render_subplot(2, len(states), s+1, state)
-                if s > 0: ax.set_title(str(scramble[s-1]))
+    #         for s, state in enumerate(states):
+    #             ax = domain.render_subplot(2, len(states), s+1, state)
+    #             if s > 0: ax.set_title(str(scramble[s-1]))
 
-            for s, state in enumerate(ori_states):
-                ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
-                if s > 0: ax.set_title(str(ori_scramble[s-1]))
-                else: ax.set_title(str(orisym))
+    #         for s, state in enumerate(ori_states):
+    #             ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
+    #             if s > 0: ax.set_title(str(ori_scramble[s-1]))
+    #             else: ax.set_title(str(orisym))
 
-            pt.show()
+    #         pt.show()
 
-        assert (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all()
+    #     assert (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all()
 

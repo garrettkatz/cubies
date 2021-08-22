@@ -1,4 +1,4 @@
-def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
+def macro_search(state, domain, bfs_tree, pattern_database, max_depth, orientation_neutral=True):
     # returns result = (actions, symmetry index, macro)
     # or result = False if there is no path to a macro or solved state
     
@@ -11,7 +11,10 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
         descendent = state[permutation]
         
         # Empty macro if problem is solved in descendent state
-        if domain.is_solved_in(descendent):
+        if orientation_neutral and domain.is_solved_in(descendent):
+            sym = (domain.orientations_of(descendent) == domain.solved_state()).all(axis=1).argmax()
+            return actions, sym, []
+        if not orientation_neutral and (domain.solved_state() == descendent).all():
             sym = (domain.orientations_of(descendent) == domain.solved_state()).all(axis=1).argmax()
             return actions, sym, []
 
@@ -22,7 +25,7 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth):
     # Failure if no path to macro found
     return False
 
-def run(state, domain, bfs_tree, pattern_database, max_depth, max_actions):
+def run(state, domain, bfs_tree, pattern_database, max_depth, max_actions, orientation_neutral=True):
     # returns solved, plan
     # solved: True if path to solved state was found, False otherwise
     # plan: [...,(actions, sym index, macro),...] a sequence of macro_search results
@@ -33,7 +36,7 @@ def run(state, domain, bfs_tree, pattern_database, max_depth, max_actions):
     while True:
 
         # Search for next macro
-        result = macro_search(state, domain, bfs_tree, pattern_database, max_depth)
+        result = macro_search(state, domain, bfs_tree, pattern_database, max_depth, orientation_neutral)
         
         # Return failure if none found
         if result is False: return False, plan
@@ -50,7 +53,8 @@ def run(state, domain, bfs_tree, pattern_database, max_depth, max_actions):
         plan.append(result)
 
         # Terminate once solved
-        if domain.is_solved_in(state): return True, plan
+        if orientation_neutral and domain.is_solved_in(state): return True, plan
+        if not orientation_neutral and (domain.solved_state() == state).all(): return True, plan
 
 if __name__ == "__main__":
 
