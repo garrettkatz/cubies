@@ -144,7 +144,7 @@ if __name__ == "__main__":
     # ruled state set that shrinks/grows over time as unruled states are processed
 
     # config
-    tree_depth = 5
+    tree_depth = 11
     max_depth = 1
     cube_size = 2
     # valid_actions = None
@@ -226,16 +226,20 @@ if __name__ == "__main__":
 
     if verbose: print("(max_depth = %d)" % max_depth)
 
-    import matplotlib.pyplot as pt
-    pt.subplot(1,2,1)
-    pt.plot((np.array(rule_counts) + 1))
-    pt.xlabel("iter")
-    pt.ylabel("num rules")
-    pt.subplot(1,2,2)
-    pt.plot((np.array(wildcard_counts) + 1))
-    pt.xlabel("iter")
-    pt.ylabel("num wildcards")
-    pt.show()
+    import pickle as pk
+    with open("procres.pkl","wb") as f: pk.dump((rule_counts, wildcard_counts), f)
+
+    # with open("procres.pkl","rb") as f: (rule_counts, wildcard_counts) = pk.load(f)
+    # import matplotlib.pyplot as pt
+    # pt.subplot(1,2,1)
+    # pt.plot((np.array(rule_counts) + 1))
+    # pt.xlabel("iter")
+    # pt.ylabel("num rules")
+    # pt.subplot(1,2,2)
+    # pt.plot((np.array(wildcard_counts) + 1))
+    # pt.xlabel("iter")
+    # pt.ylabel("num wildcards")
+    # pt.show()
 
     # confirm correctness
     if confirm:
