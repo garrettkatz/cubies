@@ -1,3 +1,4 @@
+import os
 import pickle as pk
 import itertools as it
 import numpy as np
@@ -6,11 +7,11 @@ from algorithm import run
 from utils import softmax
 
 class Candidate:
-    def __init__(self, patterns, wildcards, macros, domain, orientation_neutral):
+    def __init__(self, patterns, wildcards, macros):
         self.patterns = patterns
         self.wildcards = wildcards
         self.macros = macros
-        self.pdb = PatternDatabase(patterns, wildcards, macros, domain, orientation_neutral)
+        self.solved_sum = 0
         self.godliness_sum = 0
         self.evaluation_count = 0
 
@@ -72,50 +73,56 @@ def screen(cand, state, path, rng, tree, max_depth, tree_depth, use_safe_depth):
 if __name__ == "__main__":
 
     # config
-    do_search = True
-    show_results = True
-    post_mortem = False
-
-    # do_search = False
-    # show_results = True
-    # post_mortem = False
-
     # larger exploration is important for larger state spaces, at least with uniform state sampling
     # larger state spaces need a few rules to start getting any godliness
     # otherwise the initial candidate dominates its offspring and keeps getting selected
     # tree_depth = 11
     # use_safe_depth = False
-    tree_depth = 8
+    tree_depth = 4
     use_safe_depth = True
     exploration = 1
-    state_sampling = "bfs order"
+    state_sampling = "bfs"
     # state_sampling = "uniform"
-    # state_sampling = "soft depth"
 
     max_depth = 1
     cube_size = 2
     # valid_actions = None
-    valid_actions = it.product((0,1,2), (0,), (0, 1, 2, 3)) # only spinning one plane on each axis for 2cube
+    valid_actions = tuple(it.product((0,1,2), (0,), (0, 1, 2, 3))) # only spinning one plane on each axis for 2cube
     max_actions = 30
     orientation_neutral=False
     
-    selection_policy = "hard ucb"
-    # selection_policy = "soft ucb"
+    selection_policy = "hucb"
+    # selection_policy = "sucb"
     # selection_policy = "uniform"
 
-    obj_names = ["godliness", "folkliness"]
+    obj_names = ("godliness", "folkliness")
 
-    num_search_iters = 2**13
+    num_search_iters = 2**10
     # candidate_buffer_size = num_search_iters
-    candidate_buffer_size = 1024
+    candidate_buffer_size = 512
+    num_instances = 16
     num_reps = 1
     # break_seconds = 30 * 60
     break_seconds = 0
     dump_dir = "psearch"
 
-    animate_tree = False
+    config = {
+        name: value for (name, value) in globals().items()
+        if type(value) in [bool, int, str, tuple] and name[:2] != "__"}
 
+    animate_tree = False
     verbose = True
+
+    do_search = True
+    show_results = True
+    post_mortem = True
+
+    # do_search = False
+    # show_results = True
+    # post_mortem = False
+
+    # set up descriptive dump name
+    dump_base = "N%d_D%d_M%d_%s_%s%s" % (cube_size, tree_depth, max_depth, state_sampling, selection_policy, exploration)
 
     # Set up domain and state-space
     from cube import CubeDomain
@@ -128,32 +135,41 @@ if __name__ == "__main__":
     states = np.array(states)
     paths = list(map(tuple, map(domain.reverse, paths))) # from state to solved
     dists = np.array(list(map(len, paths)))
+    print("tree layer sizes:")
+    for dep in range(tree_depth): print(len(tree._layers[dep]))
 
     # random number generation
     rng = np.random.default_rng()
 
-    def evaluate(cand, state, path):
-        solved, plan = run(state, domain, tree, cand.pdb, max_depth, max_actions, orientation_neutral)
-        if solved:
-            soln_len = sum([len(actions) + len(macro) for (actions, _, macro) in plan])
-            godliness = len(path) / max(1, soln_len)
-            cand.godliness_sum += godliness
-        else:
-            cand.godliness_sum += 0
-        cand.evaluation_count += 1
+    def evaluate(cand, instances):
+
+        # wrap candidate in pattern database
+        pdb = PatternDatabase(cand.patterns, cand.wildcards, cand.macros, domain, orientation_neutral)
+
+        # run algorithm on problem instances
+        for state, distance in instances:
+            solved, plan = run(state, domain, tree, pdb, max_depth, max_actions, orientation_neutral)
+            if solved:
+                soln_len = sum([len(actions) + len(macro) for (actions, _, macro) in plan])
+                if soln_len == 0: godliness = int(distance == 0)
+                else: godliness = distance / soln_len
+                cand.godliness_sum += godliness
+                cand.solved_sum += 1
+            cand.evaluation_count += 1
         
+        # return evaluation metrics
         godliness = cand.godliness_sum / cand.evaluation_count
         folkliness = -len(cand.macros) # larger pdb is worse
-
         return godliness, folkliness
+
+    def instance_minibatch():
+        index = rng.choice(len(states), num_instances)
+        return tuple((states[i], dists[i]) for i in index)
 
     if do_search:
 
         from time import sleep
         for rep in range(num_reps):
-
-            # set up data dump
-            dump_file = "%s/rep_%d.pkl" % (dump_dir, rep)
 
             # set up candidate pool
             candidate = {} # saves the best candidates found so far
@@ -167,11 +183,9 @@ if __name__ == "__main__":
             candidate[0] = Candidate(
                 patterns = states[:1,:].copy(),
                 wildcards = np.zeros((1, domain.state_size()), dtype=bool),
-                macros = [()],
-                domain = domain,
-                orientation_neutral = orientation_neutral)
+                macros = [()])
             # maintain invariant that every candidate is ranked and evaluated at least once
-            godliness, folkliness = evaluate(candidate[0], domain.solved_state(), ())
+            godliness, folkliness = evaluate(candidate[0], instance_minibatch())
             objective[0] = godliness, folkliness
             ranking[0] = 0 # no other candidates yet
             num_cand = 1
@@ -187,8 +201,8 @@ if __name__ == "__main__":
                 ucb_logits = Q + exploration * np.sqrt(np.log(n) / (N+1))
 
                 ## select a candidate still saved in memory
-                if selection_policy == "hard ucb": c = keys[ucb_logits.argmax()]
-                if selection_policy == "soft ucb": c = rng.choice(keys, p = softmax(ucb_logits))
+                if selection_policy == "hucb": c = keys[ucb_logits.argmax()]
+                if selection_policy == "sucb": c = rng.choice(keys, p = softmax(ucb_logits))
                 if selection_policy == "uniform": c = rng.choice(keys)
 
                 selection_count[c] += 1
@@ -198,13 +212,12 @@ if __name__ == "__main__":
 
                 # sample a state
                 if state_sampling == "uniform": s = rng.choice(len(states))
-                if state_sampling == "soft depth": s = rng.choice(len(states), p = softmax(-dists))
-                if state_sampling == "bfs order": s = state_counter[c] % len(states)
+                if state_sampling == "bfs": s = state_counter[c] % len(states)
                 state_counter[c] += 1
                 state, path = states[s], paths[s]
 
                 # evaluate and update objectives
-                godliness, folkliness = evaluate(candidate[c], state, path)
+                godliness, folkliness = evaluate(candidate[c], instance_minibatch())
                 objective[c] = godliness, folkliness
 
                 # update dominated status of neighbors after evaluation
@@ -220,7 +233,7 @@ if __name__ == "__main__":
 
                     # update candidate set
                     patterns, wildcards, macros = upgrade
-                    candidate[num_cand] = Candidate(patterns, wildcards, macros, domain, orientation_neutral)
+                    candidate[num_cand] = Candidate(patterns, wildcards, macros)
                     parent[num_cand] = c
                     selection_count[num_cand] = 0
                     state_counter[num_cand] = state_counter[c]
@@ -228,6 +241,7 @@ if __name__ == "__main__":
                     # carry forward parent metrics
                     candidate[num_cand].evaluation_count = candidate[c].evaluation_count
                     candidate[num_cand].godliness_sum = candidate[c].godliness_sum
+                    candidate[num_cand].solved_sum = candidate[c].solved_sum
                     godliness = candidate[num_cand].godliness_sum / candidate[num_cand].evaluation_count
                     folkliness = -len(candidate[num_cand].macros)
                     objective[num_cand] = godliness, folkliness
@@ -244,9 +258,11 @@ if __name__ == "__main__":
                         worst = keys[ranking[keys].argmax()]
                         candidate.pop(worst)
 
-                # save progress
-                progress = selection_count[:num_cand], parent[:num_cand], objective[:num_cand], ranking[:num_cand]
-                with open(dump_file, "wb") as df: pk.dump(progress, df)
+                # save results
+                metrics = tuple(metric[:num_cand]
+                    for metric in [selection_count, parent, objective, ranking, state_counter])
+                dump_name = "%s_r%d" % (dump_base, rep)
+                with open(dump_name + ".pkl", "wb") as df: pk.dump((config, candidate, metrics), df)
 
                 # if verbose and n % (10**int(np.log10(n))) == 0:
                 if verbose:
@@ -257,6 +273,10 @@ if __name__ == "__main__":
                     # print("%d | %d in frontier | %d spawns | counts <=%d | bests: %s" % (c, frontier.size, num_spawns, count[:c+1].max(), ", ".join(bests)))
                     # print("iter %d: %d <= %d rules, %f wildcard, done=%s (k=%d)" % (epoch, len(macros), len(states), wildcards.sum() / wildcards.size, done, k))
 
+            # archive results
+            dump_name = "%s_r%d" % (dump_base, rep)
+            os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
+
             print("Breaking for %s seconds..." % str(break_seconds))
             sleep(break_seconds)
 
@@ -264,13 +284,20 @@ if __name__ == "__main__":
 
         import matplotlib.pyplot as pt
 
-        # load progress
+        # load results
         rep_results = []
         for rep in range(num_reps):
-            dump_file = "%s/rep_%d.pkl" % (dump_dir, rep)
-            with open(dump_file, "rb") as df: rep_results.append(pk.load(df))
+            # dump_name = "%s/rep_%d.pkl" % (dump_dir, rep)
+            # dump_name = "%s/rep_%d_N2_D11_bfs_d1_hucb_x1.pkl" % (dump_dir, rep)
+            dump_name = "%s/%s_r%d" % (dump_dir, dump_base, rep)
+            with open(dump_name + ".pkl", "rb") as df:
+                config, candidate, results = pk.load(df)
+                rep_results.append(results)
 
-        selection_count, parent, objective, ranking = rep_results[0]
+        # # overwrite config with loaded values
+        # for name, value in config.items(): eval("%s = %s" % (name, str(value)))
+
+        selection_count, parent, objective, ranking, state_counter = rep_results[0]
         nc = len(ranking)
         # elites = np.flatnonzero(ranking[1:] < 20) + 1
         elites = np.arange(1, nc)
@@ -288,7 +315,9 @@ if __name__ == "__main__":
                 [objective[c,obj_names.index("godliness")], objective[parent[c],obj_names.index("godliness")]],
                 '-ko')
             if animate_tree: pt.pause(0.01)
-        if not animate_tree: pt.show()
+        if not animate_tree:
+            pt.savefig("%s/%s_r0_ptree.png" % (dump_dir, dump_base))
+            pt.show()
 
         # pt.figure(figsize=(15, 5))
         # for rep, results in enumerate(rep_results):
@@ -325,4 +354,56 @@ if __name__ == "__main__":
         #     pt.ylabel("godliness")
 
         # pt.legend()
+        # pt.savefig("%s/%s.png" % (dump_dir, dump_base))
+
         # pt.show()
+
+    if post_mortem:
+
+        godly_metric, godly_so_far, godly_uniform = [], [], []
+        solved_metric, solved_so_far, solved_uniform = [], [], []
+        for rep in range(num_reps):
+            dump_name = "%s/%s_r%d" % (dump_dir, dump_base, rep)
+            with open(dump_name + ".pkl", "rb") as df: config, candidate, results = pk.load(df)
+            selection_count, parent, objective, ranking, state_counter = results
+
+            for c, cand in candidate.items():
+                # if selection_count[c] < 1: continue
+
+                godly_metric.append(cand.godliness_sum / cand.evaluation_count)
+                solved_metric.append(cand.solved_sum / cand.evaluation_count)
+
+                cand.godliness_sum = cand.solved_sum = cand.evaluation_count = 0
+                evaluate(cand, [(states[s], dists[s])
+                    for s in rng.choice(state_counter[c], size=32) % len(states)])
+                godly_so_far.append(cand.godliness_sum / cand.evaluation_count)
+                solved_so_far.append(cand.solved_sum / cand.evaluation_count)
+
+                cand.godliness_sum = cand.solved_sum = cand.evaluation_count = 0
+                evaluate(cand, [(states[s], dists[s]) for s in rng.choice(len(states), size=32)])
+                godly_uniform.append(cand.godliness_sum / cand.evaluation_count)
+                solved_uniform.append(cand.solved_sum / cand.evaluation_count)
+
+        import matplotlib.pyplot as pt
+        pt.subplot(2,2,1)
+        pt.scatter(godly_metric, godly_so_far)
+        pt.xlabel("godly metric")
+        pt.ylabel("so_far")
+        pt.subplot(2,2,2)
+        pt.scatter(godly_metric, godly_uniform)
+        pt.xlabel("godly metric")
+        pt.ylabel("uniform")
+
+        pt.subplot(2,2,3)
+        pt.scatter(solved_metric, solved_so_far)
+        pt.xlabel("solved metric")
+        pt.ylabel("so_far")
+        pt.subplot(2,2,4)
+        pt.scatter(solved_metric, solved_uniform)
+        pt.xlabel("solved metric")
+        pt.ylabel("uniform")
+
+        pt.tight_layout()
+        pt.show()
+
+
