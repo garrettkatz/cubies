@@ -76,11 +76,11 @@ if __name__ == "__main__":
     # larger exploration is important for larger state spaces, at least with uniform state sampling
     # larger state spaces need a few rules to start getting any godliness
     # otherwise the initial candidate dominates its offspring and keeps getting selected
-    tree_depth = 11
-    use_safe_depth = False
-    # tree_depth = 6
-    # use_safe_depth = True
-    exploration = 100
+    # tree_depth = 11
+    # use_safe_depth = False
+    tree_depth = 4
+    use_safe_depth = True
+    exploration = 10
     state_sampling = "bfs"
     # state_sampling = "uniform"
 
@@ -97,7 +97,7 @@ if __name__ == "__main__":
 
     obj_names = ("godliness", "folkliness")
 
-    num_search_iters = 2**20
+    num_search_iters = 2**15
     # candidate_buffer_size = num_search_iters
     candidate_buffer_size = 1024
     num_instances = 32
@@ -114,7 +114,7 @@ if __name__ == "__main__":
     verbose = True
 
     do_search = True
-    show_results = False
+    show_results = True
     post_mortem = False
 
     # do_search = False
@@ -188,16 +188,31 @@ if __name__ == "__main__":
             godliness, folkliness = evaluate(candidate[0], instance_minibatch())
             objective[0] = godliness, folkliness
             ranking[0] = 0 # no other candidates yet
+            leaves = set([0])
             num_cand = 1
 
             for n in range(1, num_search_iters):
 
+                # backup leaf rankings
+                leaf_index = list(leaves)
+                legacy = np.ones(num_cand) * ranking[:num_cand].max()
+                legacy[leaf_index] = ranking[leaf_index]
+                for c in reversed(range(num_cand)):
+                    legacy[parent[c]] = min(legacy[parent[c]], legacy[c])
+
                 # enumerate currently buffered candidates
                 keys = list(candidate.keys())
                 
+                # discard candidate with worst legacy if buffer size reached
+                if len(candidate) == candidate_buffer_size:
+                    worst = keys[legacy[keys].argmax()]
+                    keys.remove(worst)
+                    candidate.pop(worst)
+
                 # upper confidence bounds
                 N = selection_count[keys]
-                Q = -ranking[keys].copy() # ranking closer to 0 is better
+                # Q = -ranking[keys].copy() # ranking closer to 0 is better
+                Q = -legacy[keys].copy() # descendent ranking closer to 0 is better
                 ucb_logits = Q + exploration * np.sqrt(np.log(n) / (N+1))
 
                 ## select a candidate still saved in memory
@@ -208,7 +223,9 @@ if __name__ == "__main__":
                 selection_count[c] += 1
 
                 # check whether each neighbor is dominated by current candidate before evaluation
-                was_dominated = check_domination_of(objective[:num_cand], by=objective[c])
+                # was_dominated = check_domination_of(objective[:num_cand], by=objective[c])
+                if c in leaves:
+                    was_dominated = check_domination_of(objective[leaf_index], by=objective[c])
 
                 # sample a state
                 if state_sampling == "uniform": s = rng.choice(len(states))
@@ -221,11 +238,16 @@ if __name__ == "__main__":
                 objective[c] = godliness, folkliness
 
                 # update dominated status of neighbors after evaluation
-                is_dominated = check_domination_of(objective[:num_cand], by=objective[c])
+                # is_dominated = check_domination_of(objective[:num_cand], by=objective[c])
+                if c in leaves:
+                    is_dominated = check_domination_of(objective[leaf_index], by=objective[c])
 
-                # update rankings
-                ranking[:num_cand] += (is_dominated.astype(int) - was_dominated.astype(int))
-                ranking[c] = check_domination_of(objective[c], by=objective[:num_cand]).sum()
+                # # update rankings
+                # ranking[:num_cand] += (is_dominated.astype(int) - was_dominated.astype(int))
+                # ranking[c] = check_domination_of(objective[c], by=objective[:num_cand]).sum()
+                if c in leaves:
+                    ranking[leaf_index] += (is_dominated.astype(int) - was_dominated.astype(int))
+                    ranking[c] = check_domination_of(objective[c], by=objective[leaf_index]).sum()
 
                 # upgrade selected candidate if needed
                 upgrade = screen(candidate[c], state, path, rng, tree, max_depth, tree_depth, use_safe_depth)
@@ -238,38 +260,51 @@ if __name__ == "__main__":
                     selection_count[num_cand] = 0
                     state_counter[num_cand] = state_counter[c]
 
-                    # carry forward parent metrics
-                    candidate[num_cand].evaluation_count = candidate[c].evaluation_count
-                    candidate[num_cand].godliness_sum = candidate[c].godliness_sum
-                    candidate[num_cand].solved_sum = candidate[c].solved_sum
-                    godliness = candidate[num_cand].godliness_sum / candidate[num_cand].evaluation_count
-                    folkliness = -len(candidate[num_cand].macros)
+                    # # carry forward parent metrics
+                    # candidate[num_cand].evaluation_count = candidate[c].evaluation_count
+                    # candidate[num_cand].godliness_sum = candidate[c].godliness_sum
+                    # candidate[num_cand].solved_sum = candidate[c].solved_sum
+                    # godliness = candidate[num_cand].godliness_sum / candidate[num_cand].evaluation_count
+                    # folkliness = -len(candidate[num_cand].macros)
+                    # objective[num_cand] = godliness, folkliness
+                    
+                    # first child candidate evaluation
+                    godliness, folkliness = evaluate(candidate[num_cand], instance_minibatch())
                     objective[num_cand] = godliness, folkliness
 
                     # update rankings
-                    ranking[:num_cand] += check_domination_of(objective[:num_cand], by = objective[num_cand])
-                    ranking[num_cand] = check_domination_of(objective[num_cand], by = objective[:num_cand]).sum()
+                    # ranking[:num_cand] += check_domination_of(objective[:num_cand], by = objective[num_cand])
+                    # ranking[num_cand] = check_domination_of(objective[num_cand], by = objective[:num_cand]).sum()
+                    ranking[leaf_index] += check_domination_of(objective[leaf_index], by = objective[num_cand])
+                    ranking[num_cand] = check_domination_of(objective[num_cand], by = objective[leaf_index]).sum()
+
+                    # update leaf set
+                    leaves.add(num_cand)
+                    leaves.discard(c)
+
+                    # # discard most dominated candidate if buffer size reached
+                    # if len(candidate) > candidate_buffer_size:
+                    #     worst = keys[ranking[keys].argmax()]
+                    #     candidate.pop(worst)
 
                     # update num candidates
                     num_cand += 1
-
-                    # discard most dominated candidate if buffer size reached
-                    if len(candidate) > candidate_buffer_size:
-                        worst = keys[ranking[keys].argmax()]
-                        candidate.pop(worst)
 
                 # save results
                 metrics = tuple(metric[:num_cand]
                     for metric in [selection_count, parent, objective, ranking, state_counter])
                 dump_name = "%s_r%d" % (dump_base, rep)
-                with open(dump_name + ".pkl", "wb") as df: pk.dump((config, candidate, metrics), df)
+                with open(dump_name + ".pkl", "wb") as df: pk.dump((config, candidate, leaves, metrics), df)
 
                 # if verbose and n % (10**int(np.log10(n))) == 0:
                 if verbose:
 
                     # bests = ["%s: %s" % (obj_names[i], objective[(selection_count > 0), i].max()) for i in range(objective.shape[1])]
                     bests = ["%s: %s" % (obj_names[i], objective[:num_cand, i].max()) for i in range(objective.shape[1])]
-                    print("%d/%d: selected <= %d | counter <= %d | bests: %s"  % (n, num_search_iters, selection_count.max(), state_counter.max(), ", ".join(bests)))
+                    print("%d/%d: selected %d~%.1f~%d | counter <= %d | |leaves| = %d | bests: %s"  %
+                        (n, num_search_iters,
+                        selection_count[:num_cand].min(), selection_count[:num_cand].mean(), selection_count[:num_cand].max(),
+                        state_counter.max(), len(leaves), ", ".join(bests)))
                     # print("%d | %d in frontier | %d spawns | counts <=%d | bests: %s" % (c, frontier.size, num_spawns, count[:c+1].max(), ", ".join(bests)))
                     # print("iter %d: %d <= %d rules, %f wildcard, done=%s (k=%d)" % (epoch, len(macros), len(states), wildcards.sum() / wildcards.size, done, k))
 
@@ -286,18 +321,21 @@ if __name__ == "__main__":
 
         # load results
         rep_results = []
+        rep_leaves = []
         for rep in range(num_reps):
             # dump_name = "%s/rep_%d.pkl" % (dump_dir, rep)
             # dump_name = "%s/rep_%d_N2_D11_bfs_d1_hucb_x1.pkl" % (dump_dir, rep)
             dump_name = "%s/%s_r%d" % (dump_dir, dump_base, rep)
             with open(dump_name + ".pkl", "rb") as df:
-                config, candidate, results = pk.load(df)
+                config, candidate, leaves, results = pk.load(df)
                 rep_results.append(results)
+                rep_leaves.append(leaves)
 
         # # overwrite config with loaded values
         # for name, value in config.items(): eval("%s = %s" % (name, str(value)))
 
         selection_count, parent, objective, ranking, state_counter = rep_results[0]
+        leaves = list(rep_leaves[0])
         nc = len(ranking)
         # elites = np.flatnonzero(ranking[1:] < 20) + 1
         elites = np.arange(1, nc)
@@ -315,6 +353,10 @@ if __name__ == "__main__":
                 [objective[c,obj_names.index("godliness")], objective[parent[c],obj_names.index("godliness")]],
                 '-ko')
             if animate_tree: pt.pause(0.01)
+        pt.plot(
+            objective[leaves, obj_names.index("folkliness")],
+            objective[leaves, obj_names.index("godliness")],
+            'go')
         if not animate_tree:
             pt.savefig("%s/%s_r0_ptree.png" % (dump_dir, dump_base))
             pt.show()
@@ -364,7 +406,7 @@ if __name__ == "__main__":
         solved_metric, solved_so_far, solved_uniform = [], [], []
         for rep in range(num_reps):
             dump_name = "%s/%s_r%d" % (dump_dir, dump_base, rep)
-            with open(dump_name + ".pkl", "rb") as df: config, candidate, results = pk.load(df)
+            with open(dump_name + ".pkl", "rb") as df: config, candidate, leaves, results = pk.load(df)
             selection_count, parent, objective, ranking, state_counter = results
 
             for c, cand in candidate.items():
