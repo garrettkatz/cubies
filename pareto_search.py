@@ -78,7 +78,7 @@ if __name__ == "__main__":
     # otherwise the initial candidate dominates its offspring and keeps getting selected
     # tree_depth = 11
     # use_safe_depth = False
-    tree_depth = 4
+    tree_depth = 6
     use_safe_depth = True
     exploration = 10
     state_sampling = "bfs"
@@ -97,14 +97,15 @@ if __name__ == "__main__":
 
     obj_names = ("godliness", "folkliness")
 
-    num_search_iters = 2**15
+    num_search_iters = 2**16
     # candidate_buffer_size = num_search_iters
-    candidate_buffer_size = 1024
+    candidate_buffer_size = 64
     num_instances = 32
     num_reps = 1
     # break_seconds = 30 * 60
     break_seconds = 0
     dump_dir = "psearch"
+    save_period = 1000
 
     config = {
         name: value for (name, value) in globals().items()
@@ -290,21 +291,23 @@ if __name__ == "__main__":
                     # update num candidates
                     num_cand += 1
 
-                # save results
-                metrics = tuple(metric[:num_cand]
-                    for metric in [selection_count, parent, objective, ranking, state_counter])
-                dump_name = "%s_r%d" % (dump_base, rep)
-                with open(dump_name + ".pkl", "wb") as df: pk.dump((config, candidate, leaves, metrics), df)
+                # save results periodically
+                if n % save_period == 0:
+                    metrics = tuple(metric[:num_cand]
+                        for metric in [selection_count, parent, objective, ranking, state_counter])
+                    dump_name = "%s_r%d" % (dump_base, rep)
+                    with open(dump_name + ".pkl", "wb") as df: pk.dump((config, candidate, leaves, metrics), df)
+                    if verbose: print("   saving to disk")
 
                 # if verbose and n % (10**int(np.log10(n))) == 0:
                 if verbose:
 
                     # bests = ["%s: %s" % (obj_names[i], objective[(selection_count > 0), i].max()) for i in range(objective.shape[1])]
                     bests = ["%s: %s" % (obj_names[i], objective[:num_cand, i].max()) for i in range(objective.shape[1])]
-                    print("%d/%d: selected %d~%.1f~%d | counter <= %d | |leaves| = %d | bests: %s"  %
+                    print("%d/%d: selected %d~%.1f~%d | counter <= %d | %d leaves | %d cands | bests: %s"  %
                         (n, num_search_iters,
                         selection_count[:num_cand].min(), selection_count[:num_cand].mean(), selection_count[:num_cand].max(),
-                        state_counter.max(), len(leaves), ", ".join(bests)))
+                        state_counter.max(), len(leaves), len(candidate), ", ".join(bests)))
                     # print("%d | %d in frontier | %d spawns | counts <=%d | bests: %s" % (c, frontier.size, num_spawns, count[:c+1].max(), ", ".join(bests)))
                     # print("iter %d: %d <= %d rules, %f wildcard, done=%s (k=%d)" % (epoch, len(macros), len(states), wildcards.sum() / wildcards.size, done, k))
 
@@ -338,7 +341,8 @@ if __name__ == "__main__":
         leaves = list(rep_leaves[0])
         nc = len(ranking)
         # elites = np.flatnonzero(ranking[1:] < 20) + 1
-        elites = np.arange(1, nc)
+        # elites = np.arange(1, nc)
+        elites = leaves
         if animate_tree:
             pt.ion()
             pt.figure()
