@@ -76,11 +76,11 @@ if __name__ == "__main__":
     # larger exploration is important for larger state spaces, at least with uniform state sampling
     # larger state spaces need a few rules to start getting any godliness
     # otherwise the initial candidate dominates its offspring and keeps getting selected
-    # tree_depth = 11
-    # use_safe_depth = False
-    tree_depth = 4
-    use_safe_depth = True
-    exploration = 1
+    tree_depth = 11
+    use_safe_depth = False
+    # tree_depth = 6
+    # use_safe_depth = True
+    exploration = 100
     state_sampling = "bfs"
     # state_sampling = "uniform"
 
@@ -97,10 +97,10 @@ if __name__ == "__main__":
 
     obj_names = ("godliness", "folkliness")
 
-    num_search_iters = 2**10
+    num_search_iters = 2**20
     # candidate_buffer_size = num_search_iters
-    candidate_buffer_size = 512
-    num_instances = 16
+    candidate_buffer_size = 1024
+    num_instances = 32
     num_reps = 1
     # break_seconds = 30 * 60
     break_seconds = 0
@@ -114,8 +114,8 @@ if __name__ == "__main__":
     verbose = True
 
     do_search = True
-    show_results = True
-    post_mortem = True
+    show_results = False
+    post_mortem = False
 
     # do_search = False
     # show_results = True
