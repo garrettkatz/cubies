@@ -37,6 +37,7 @@ class PatternDatabase:
     def reset(self):
 
         # match results
+        self.match_mask = np.zeros(len(self.patterns), dtype=bool)
         self.match_index = 0
         self.matched = False
 
@@ -48,29 +49,35 @@ class PatternDatabase:
 
     def query(self, state):
 
-        # brute query
-        hits = (self.patterns == state) | (self.wildcard)
-        self.match_index = np.flatnonzero(hits.all(axis=1))
-
-        # # progressive query
-        # matches = np.arange(self.patterns.shape[0])
-        # for k in range(len(state)):
-        #     matches = matches[(self.patterns[matches, k] == state[k]) | (self.patterns[matches, k] == 0)]
-        # self.match_index = matches
-
-        # update trace
-        if self.match_index.size > 0:
-            idx = self.match_index[0]
-            sym_mod = 24 if self.orientation_neutral else 1
-            self.match_counts[idx // sym_mod] += 1
-            self.miss_counts[:idx] += ~hits[:idx]
-        else:
-            self.miss_counts += ~hits
-        self.num_queries += 1
-
-        # return status
-        self.matched = self.match_index.size > 0
+        # fast brute
+        self.match_mask = ((self.patterns == state) | (self.wildcard)).all(axis=1)
+        self.match_index = (self.match_mask.argmax(),)
+        self.matched = self.match_mask[self.match_index[0]]
         return self.matched
+
+        # # brute query
+        # hits = (self.patterns == state) | (self.wildcard)
+        # self.match_index = np.flatnonzero(hits.all(axis=1))
+
+        # # # progressive query
+        # # matches = np.arange(self.patterns.shape[0])
+        # # for k in range(len(state)):
+        # #     matches = matches[(self.patterns[matches, k] == state[k]) | (self.patterns[matches, k] == 0)]
+        # # self.match_index = matches
+
+        # # # update trace
+        # # if self.match_index.size > 0:
+        # #     idx = self.match_index[0]
+        # #     sym_mod = 24 if self.orientation_neutral else 1
+        # #     self.match_counts[idx // sym_mod] += 1
+        # #     self.miss_counts[:idx] += ~hits[:idx]
+        # # else:
+        # #     self.miss_counts += ~hits
+        # # self.num_queries += 1
+
+        # # return status
+        # self.matched = self.match_index.size > 0
+        # return self.matched
 
     def result(self): # assumes match was not False
         m = self.match_index[0] # what about multiple matches?

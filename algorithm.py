@@ -2,13 +2,7 @@ def macro_search(state, domain, bfs_tree, pattern_database, max_depth, orientati
     # returns result = (actions, symmetry index, macro)
     # or result = False if there is no path to a macro or solved state
     
-    for actions, permutation in bfs_tree:
-
-        # Don't exceed maximum search depth
-        if len(actions) > max_depth: continue    
-
-        # Compute descendent state
-        descendent = state[permutation]
+    for actions, descendent in bfs_tree.rooted_at(state, up_to_depth=max_depth):
         
         # Empty macro if problem is solved in descendent state
         if orientation_neutral and domain.is_solved_in(descendent):

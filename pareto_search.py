@@ -78,7 +78,7 @@ if __name__ == "__main__":
     # otherwise the initial candidate dominates its offspring and keeps getting selected
     # tree_depth = 11
     # use_safe_depth = False
-    tree_depth = 6
+    tree_depth = 8
     use_safe_depth = True
     exploration = 10
     state_sampling = "bfs"
@@ -113,17 +113,15 @@ if __name__ == "__main__":
 
     animate_tree = False
     verbose = True
+    do_dump = True
 
     do_search = True
-    show_results = True
+    show_results = False
     post_mortem = False
 
-    # do_search = False
-    # show_results = True
-    # post_mortem = False
-
     # set up descriptive dump name
-    dump_base = "N%d_D%d_M%d_%s_%s%s" % (cube_size, tree_depth, max_depth, state_sampling, selection_policy, exploration)
+    dump_base = "N%d_D%d_M%d_C%d_%s_%s%s" % (
+        cube_size, tree_depth, max_depth, candidate_buffer_size, state_sampling, selection_policy, exploration)
 
     # Set up domain and state-space
     from cube import CubeDomain
@@ -136,8 +134,9 @@ if __name__ == "__main__":
     states = np.array(states)
     paths = list(map(tuple, map(domain.reverse, paths))) # from state to solved
     dists = np.array(list(map(len, paths)))
-    print("tree layer sizes:")
-    for dep in range(tree_depth): print(len(tree._layers[dep]))
+    if verbose:
+        print("tree layer sizes:")
+        for dep in range(tree_depth): print(len(tree._layers[dep]))
 
     # random number generation
     rng = np.random.default_rng()
@@ -292,7 +291,7 @@ if __name__ == "__main__":
                     num_cand += 1
 
                 # save results periodically
-                if n % save_period == 0:
+                if do_dump and (n % save_period == 0 or n + 1 == num_search_iters):
                     metrics = tuple(metric[:num_cand]
                         for metric in [selection_count, parent, objective, ranking, state_counter])
                     dump_name = "%s_r%d" % (dump_base, rep)
@@ -312,10 +311,11 @@ if __name__ == "__main__":
                     # print("iter %d: %d <= %d rules, %f wildcard, done=%s (k=%d)" % (epoch, len(macros), len(states), wildcards.sum() / wildcards.size, done, k))
 
             # archive results
-            dump_name = "%s_r%d" % (dump_base, rep)
-            os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
+            if do_dump:
+                dump_name = "%s_r%d" % (dump_base, rep)
+                os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
 
-            print("Breaking for %s seconds..." % str(break_seconds))
+            if verbose: print("Breaking for %s seconds..." % str(break_seconds))
             sleep(break_seconds)
 
     if show_results:

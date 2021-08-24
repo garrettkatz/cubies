@@ -51,9 +51,9 @@ class SearchTree:
 
 if __name__ == "__main__":
     
-    from cube import CubeDomain
-    domain = CubeDomain(3)
-    A = len(list(domain.valid_actions(domain.solved_state())))
+    # from cube import CubeDomain
+    # domain = CubeDomain(3)
+    # A = len(list(domain.valid_actions(domain.solved_state())))
 
     # tree = SearchTree(domain, max_depth=2)
     # print(tree.layers)
@@ -173,4 +173,23 @@ if __name__ == "__main__":
     # pt.legend([str(k) for k in range(max_depth+1)])
 
     # pt.show()
+
+    #### profile
+    import itertools as it
+    valid_actions = tuple(it.product((0,1,2), (0,), (0, 1, 2, 3))) # only spinning one plane on each axis for 2cube
+
+    from cube import CubeDomain
+    domain = CubeDomain(2, valid_actions)
+    init = domain.solved_state()
+
+    tree = SearchTree(domain, 5)
+    paths, states = zip(*tree.rooted_at(init))
+
+    def prof(s):
+        for _, neighbor in tree.rooted_at(states[s], up_to_depth=1):
+            dumb = (np.arange(24) == np.arange(24*500).reshape(500, 24)).all(axis=1)
+
+    for s in range(1000):
+        # print(s)
+        prof(s)
 
