@@ -244,7 +244,7 @@ class CubeDomain:
 
     def random_state(self, scramble_length, rng):
         state = self.solved_state()
-        valid_actions = tuple(self.valid_actions(state))
+        valid_actions = self.valid_actions()
         for s in range(scramble_length):
             state = self.perform(rng.choice(valid_actions), state)
         return state
@@ -291,14 +291,13 @@ if __name__ == "__main__":
     
     # pt.show()
 
-    #### test valid_action input (only twist plane 1 in each axis)
-    domain = CubeDomain(2, it.product((0,1,2), (1,), (0, 1, 2, 3)))
-    for a, (axis, plane, num) in enumerate(domain.valid_actions()):
-        state = domain.perform((axis, plane, num), domain.solved_state())
-        domain.render_subplot(3, 4, a+1, state)
+    # #### test valid_action input (only twist plane 1 in each axis)
+    # domain = CubeDomain(2, it.product((0,1,2), (1,), (0, 1, 2, 3)))
+    # for a, (axis, plane, num) in enumerate(domain.valid_actions()):
+    #     state = domain.perform((axis, plane, num), domain.solved_state())
+    #     domain.render_subplot(3, 4, a+1, state)
     
-    pt.show()
-
+    # pt.show()
 
     # #### test right-handedness of each action (visual inspect)
     # pt.figure(figsize=(20,10))
@@ -495,3 +494,64 @@ if __name__ == "__main__":
 
     #     assert (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all()
 
+    #### test reorient+recolor neutralization approach on 2cube
+    # confirms that for every reorientation of a random state, there is exactly one recoloring that restores the invariant rbw cubie
+    # furthermore, orientation->recoloring is bijective (every possible recoloring occurs once).
+    # however, the bijection is different for different random states.
+    # fortunately, a state-independent lookup (restorer variable below) maps colors of invariant cubie position to the correct recoloring.
+
+    # domain = CubeDomain(2)
+    # valid_actions = tuple(domain.valid_actions())
+    valid_actions = tuple(it.product((0,1,2), (1,), (1, 2, 3))) # only spinning one plane on each axis for 2cube
+    domain = CubeDomain(2, valid_actions)
+
+    rng = np.random.default_rng()
+    solved = domain.solved_state()
+    invariant_facies = [0,1,2] # facies of fixed corner at coordinate [0,0,0,:] in 2cube
+
+    invariant_state = np.zeros(domain.state_size())
+    invariant_state[invariant_facies] = solved[invariant_facies]
+    domain.render_subplot(1,1,1,invariant_state)
+    pt.show()
+
+    restorer = {}
+    for ori in range(24):
+        ori_solved = domain.orientations_of(solved)[ori]
+        key = tuple(ori_solved[invariant_facies])
+        restorer[key] = domain.inverse_symmetry_of(ori)
+        col_solved = domain.recolorings_of(ori_solved)[restorer[key]]
+        assert (col_solved[invariant_facies] == solved[invariant_facies]).all()
+
+    for rep in range(5):
+        state = domain.random_state(scramble_length=20, rng=rng)
+        invariant = {}
+        for ori in range(24):
+            ori_state = domain.orientations_of(state)[ori]
+            ori_solved = domain.orientations_of(solved)[ori]
+            invariant[ori] = []
+            for col in range(24):
+                col_state = domain.recolorings_of(ori_state)[col]
+                col_solved = domain.recolorings_of(ori_solved)[col]
+                if (col_state == state)[invariant_facies].all(): invariant[ori].append(col)
+            assert len(invariant[ori]) == 1
+            invariant[ori] = invariant[ori][0]
+            assert invariant[ori] == restorer[tuple(ori_state[invariant_facies])]
+
+        cols = list(invariant.values())
+        print(cols)
+        assert len(set(cols)) == 24
+
+    for ori in range(24):
+        ori_state = domain.orientations_of(state)[ori]
+        ori_solved = domain.orientations_of(solved)[ori]
+        # col = invariant[ori]
+        col = restorer[tuple(ori_state[invariant_facies])]
+        col_state = domain.recolorings_of(ori_state)[col]
+        col_solved = domain.recolorings_of(ori_solved)[col]
+        domain.render_subplot(2,3,1,state)
+        domain.render_subplot(2,3,2,ori_state)
+        domain.render_subplot(2,3,3,col_state)
+        domain.render_subplot(2,3,4,solved)
+        domain.render_subplot(2,3,5,ori_solved)
+        domain.render_subplot(2,3,6,col_solved)
+        pt.show()

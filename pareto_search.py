@@ -80,14 +80,14 @@ if __name__ == "__main__":
     # use_safe_depth = False
     tree_depth = 8
     use_safe_depth = True
-    exploration = 10
+    exploration = 1
     state_sampling = "bfs"
     # state_sampling = "uniform"
 
     max_depth = 1
     cube_size = 2
     # valid_actions = None
-    valid_actions = tuple(it.product((0,1,2), (0,), (0, 1, 2, 3))) # only spinning one plane on each axis for 2cube
+    valid_actions = tuple(it.product((0,1,2), (1,), (1, 2, 3))) # only spinning one plane on each axis for 2cube
     max_actions = 30
     orientation_neutral=False
     
@@ -115,8 +115,8 @@ if __name__ == "__main__":
     verbose = True
     do_dump = True
 
-    do_search = True
-    show_results = False
+    do_search = False
+    show_results = True
     post_mortem = False
 
     # set up descriptive dump name
