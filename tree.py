@@ -6,22 +6,25 @@ import numpy as np
 
 class SearchTree:
 
-    def __init__(self, domain, max_depth, orientation_neutral=True):
+    def __init__(self, domain, max_depth, orientation_neutral=False):
 
         permutation = np.arange(domain.state_size())
         actions = tuple()
         
         explored = set([permutation.tobytes()])
         layers = {0: [(actions, permutation)]}
+
+        all_permutations = [permutation]
+        all_paths = [actions]
         
         for depth in range(max_depth):
             layers[depth+1] = []
 
-            for actions, permutation in layers[depth]:
+            for path, permutation in layers[depth]:
                 for action in domain.valid_actions(permutation):
 
                     # get child state permutation
-                    new_actions = actions + (action,)
+                    new_path = path + (action,)
                     new_permutation = domain.perform(action, permutation)
                     
                     # skip if already explored
@@ -33,36 +36,97 @@ class SearchTree:
 
                     # otherwise add the new state to the frontier and explored set
                     explored.add(new_permutation.tobytes())
-                    layers[depth+1].append((new_actions, new_permutation))
+                    layers[depth+1].append((new_path, new_permutation))
+
+                    all_permutations.append(new_permutation)
+                    all_paths.append(new_path)
+
+        self._permutations = np.stack(all_permutations)
+        self._paths = tuple(all_paths)
+        self._count = np.cumsum([len(layers[depth]) for depth in range(max_depth+1)])
         
-        self._layers = layers
-    
+        # self._layers = layers
+
+    def depth(self):
+        return len(self._count) - 1
+
     def __iter__(self):
-        for depth in range(len(self._layers)):
-            for actions, permutation in self._layers[depth]:
-                yield actions, permutation
+        return zip(self._paths, self._permutations)
 
     def rooted_at(self, state, up_to_depth=None):
-        if up_to_depth is None: up_to_depth = len(self._layers)-1
-        for depth in range(up_to_depth+1):
-            for actions, permutation in self._layers[depth]:
-                yield actions, state[permutation]
+        if up_to_depth is None: up_to_depth = self.depth()
+        states = state.take(self._permutations[:self._count[up_to_depth]])
+        paths = self._paths[:self._count[up_to_depth]]
+        return zip(paths, states)
+    
+    def paths(self, up_to_depth=None):
+        if up_to_depth is None: up_to_depth = self.depth()
+        return self._paths[:self._count[up_to_depth]]
 
+    def permutations(self, up_to_depth=None):
+        if up_to_depth is None: up_to_depth = self.depth()
+        return self._permutations[:self._count[up_to_depth]]
+
+    def states_rooted_at(self, state, up_to_depth=None):
+        if up_to_depth is None: up_to_depth = self.depth()
+        states = state.take(self._permutations[:self._count[up_to_depth]])
+        return states
+    
+    # def __iter__(self):
+    #     for depth in range(len(self._layers)):
+    #         for actions, permutation in self._layers[depth]:
+    #             yield actions, permutation
+
+    # def rooted_at(self, state, up_to_depth=None):
+    #     if up_to_depth is None: up_to_depth = len(self._layers)-1
+    #     for depth in range(up_to_depth+1):
+    #         for actions, permutation in self._layers[depth]:
+    #             yield actions, state[permutation]
 
 if __name__ == "__main__":
     
-    # from cube import CubeDomain
-    # domain = CubeDomain(3)
-    # A = len(list(domain.valid_actions(domain.solved_state())))
+    from cube import CubeDomain
+    domain = CubeDomain(2)
+    A = len(list(domain.valid_actions(domain.solved_state())))
 
     # tree = SearchTree(domain, max_depth=2)
     # print(tree.layers)
 
-    # tree = SearchTree(domain, max_depth=4) # 5 uses up 4+ GB memory
-    # for depth in range(len(tree._layers)):
-    #     print(len(tree._layers[depth]), A**depth)
-    
-    # tree = SearchTree(domain, max_depth=2)
+    tree = SearchTree(domain, max_depth=4) # 5 uses up 4+ GB memory
+    for depth in range(len(tree._count)-1):
+        print(tree._count[depth+1] - tree._count[depth], A**(depth+1))
+
+    # slow
+    for rep in range(10):
+        x = 0
+        for action, permutation in tree:
+            x += (permutation > 10).sum()
+    print(x)
+
+    # fast
+    for rep in range(10):
+        x = (tree.permutations() > 10).sum()
+    print(x)
+
+    for rep in range(20):    
+        states_slow = np.stack([state for path, state in tree.rooted_at(domain.solved_state())])
+    print("slow", states_slow.shape)
+    for rep in range(20):
+        states_fast = tree.states_rooted_at(domain.solved_state())
+    print("fast", states_fast.shape)
+    assert (states_slow == states_fast).all()
+
+    # measure color neutrality savings
+    for depth in range(tree.depth()+1):
+        explored_neutral = set()
+        states = tree.states_rooted_at(domain.solved_state(), up_to_depth=depth)
+        for state in states:
+            if not any([neut.tobytes() in explored_neutral for neut in domain.color_neutral_to(state)]):
+                explored_neutral.add(state.tobytes())
+        print(depth, len(explored_neutral), len(states))
+
+    # tree = paths(domain, new_actions)
+
     # for actions, permutation in tree:
     #     print(actions, permutation)
 
@@ -174,22 +238,22 @@ if __name__ == "__main__":
 
     # pt.show()
 
-    #### profile
-    import itertools as it
-    valid_actions = tuple(it.product((0,1,2), (0,), (0, 1, 2, 3))) # only spinning one plane on each axis for 2cube
+    # #### profile
+    # import itertools as it
+    # valid_actions = tuple(it.product((0,1,2), (0,), (0, 1, 2, 3))) # only spinning one plane on each axis for 2cube
 
-    from cube import CubeDomain
-    domain = CubeDomain(2, valid_actions)
-    init = domain.solved_state()
+    # from cube import CubeDomain
+    # domain = CubeDomain(2, valid_actions)
+    # init = domain.solved_state()
 
-    tree = SearchTree(domain, 5)
-    paths, states = zip(*tree.rooted_at(init))
+    # tree = SearchTree(domain, 5)
+    # paths, states = zip(*tree.rooted_at(init))
 
-    def prof(s):
-        for _, neighbor in tree.rooted_at(states[s], up_to_depth=1):
-            dumb = (np.arange(24) == np.arange(24*500).reshape(500, 24)).all(axis=1)
+    # def prof(s):
+    #     for _, neighbor in tree.rooted_at(states[s], up_to_depth=1):
+    #         dumb = (np.arange(24) == np.arange(24*500).reshape(500, 24)).all(axis=1)
 
-    for s in range(1000):
-        # print(s)
-        prof(s)
+    # for s in range(1000):
+    #     # print(s)
+    #     prof(s)
 

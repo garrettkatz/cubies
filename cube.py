@@ -207,8 +207,14 @@ class CubeDomain:
             states.append(state)
         return states
 
-    def is_solved_in(self, state):
+    def is_solved_in_orientation_of(self, state):
+        # matches = (self._solved_states == state).all(axis=1)
+        # ori = matches.argmax()
+        # return matches[ori], ori
         return (self._solved_states == state).all(axis=1).any()
+
+    def is_solved_in(self, state):
+        return (self._solved_state == state).all()
 
     def orientations_of(self, state):
         return state[self._orientation_permutation].copy()
@@ -216,13 +222,16 @@ class CubeDomain:
     def reoriented_actions(self, sym):
         return dict(self._action_permutation[sym])
 
+    def reorient_path(self, path, sym):
+        return tuple(self._action_permutation[sym][action] for action in path)
+
     def inverse_symmetry_of(self, s):
         return self._inverse_symmetry[s]
 
     def recolorings_of(self, state):
         return self._color_permutation.take(state, axis=1)
 
-    def neutral_to(self, state):
+    def color_neutral_to(self, state):
         orientations = self.orientations_of(state)
         fixed_corners = orientations[:,:3]
         restorers = self._fixed_corner_restorer[tuple(fixed_corners.T)]
@@ -471,43 +480,45 @@ if __name__ == "__main__":
 
     # pt.show()
 
-    # #### test reoriented actions
-    # domain = CubeDomain(3)
-    # valid_actions = tuple(domain.valid_actions())
+    #### test reoriented actions
+    domain = CubeDomain(3)
+    valid_actions = tuple(domain.valid_actions())
 
-    # import numpy as np
-    # solved = domain.solved_state()
+    import numpy as np
+    solved = domain.solved_state()
 
-    # rng = np.random.default_rng()
-    # scramble = [tuple(a) for a in rng.choice(valid_actions, size=1)]
-    # # scramble = [(2, 2, 2)]
+    rng = np.random.default_rng()
+    scramble = [tuple(a) for a in rng.choice(valid_actions, size=1)]
+    # scramble = [(2, 2, 2)]
 
-    # for orisym in range(24):
-    # # for orisym in [8]:    
+    for orisym in range(24):
+    # for orisym in [8]:    
 
-    #     states = [solved] + domain.intermediate_states(scramble, solved)    
+        states = [solved] + domain.intermediate_states(scramble, solved)    
 
-    #     action_map = domain.reoriented_actions(orisym)    
-    #     ori_solved = domain.orientations_of(solved)[orisym]
-    #     ori_scramble = [action_map[a] for a in scramble]
-    #     ori_states = [ori_solved] + domain.intermediate_states(ori_scramble, ori_solved)
+        # action_map = domain.reoriented_actions(orisym)    
+        # ori_solved = domain.orientations_of(solved)[orisym]
+        # ori_scramble = [action_map[a] for a in scramble]
+        ori_solved = domain.orientations_of(solved)[orisym]
+        ori_scramble = domain.reorient_path(scramble, orisym)
+        ori_states = [ori_solved] + domain.intermediate_states(ori_scramble, ori_solved)
 
-    #     if not (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all():
+        if not (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all():
 
-    #         pt.figure(figsize=(20, 5))
+            pt.figure(figsize=(20, 5))
 
-    #         for s, state in enumerate(states):
-    #             ax = domain.render_subplot(2, len(states), s+1, state)
-    #             if s > 0: ax.set_title(str(scramble[s-1]))
+            for s, state in enumerate(states):
+                ax = domain.render_subplot(2, len(states), s+1, state)
+                if s > 0: ax.set_title(str(scramble[s-1]))
 
-    #         for s, state in enumerate(ori_states):
-    #             ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
-    #             if s > 0: ax.set_title(str(ori_scramble[s-1]))
-    #             else: ax.set_title(str(orisym))
+            for s, state in enumerate(ori_states):
+                ax = domain.render_subplot(2, len(states), len(states) + s+1, state)
+                if s > 0: ax.set_title(str(ori_scramble[s-1]))
+                else: ax.set_title(str(orisym))
 
-    #         pt.show()
+            pt.show()
 
-    #     assert (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all()
+        assert (states[-1] == domain.orientations_of(ori_states[-1])[domain.inverse_symmetry_of(orisym)]).all()
 
     # #### test reorient+recolor neutralization approach on 2cube
     # # confirms that for every reorientation of a random state, there is exactly one recoloring that restores the invariant rbw cubie
@@ -571,21 +582,21 @@ if __name__ == "__main__":
     #     domain.render_subplot(2,3,6,col_solved)
     #     pt.show()
 
-    #### test neutral_to
-    domain = CubeDomain(2)
-    rng = np.random.default_rng()
-    solved = domain.solved_state()
-    ori_solved = domain.orientations_of(solved)
-    neu_solved = domain.neutral_to(solved)
+    # #### test color_neutral_to
+    # domain = CubeDomain(2)
+    # rng = np.random.default_rng()
+    # solved = domain.solved_state()
+    # ori_solved = domain.orientations_of(solved)
+    # neu_solved = domain.color_neutral_to(solved)
 
-    for rep in range(5):
-        state = domain.random_state(scramble_length=20, rng=rng)
-        ori_state = domain.orientations_of(state)
-        neu_state = domain.neutral_to(state)
-        for sym in range(24):
-            assert (neu_state[sym][:3] == state[:3]).all()
-            if rep == 4:
-                domain.render_subplot(3, 24, sym + 1 + 0*24, ori_solved[sym])
-                domain.render_subplot(3, 24, sym + 1 + 1*24, ori_state[sym])
-                domain.render_subplot(3, 24, sym + 1 + 2*24, neu_state[sym])
-    pt.show()
+    # for rep in range(5):
+    #     state = domain.random_state(scramble_length=20, rng=rng)
+    #     ori_state = domain.orientations_of(state)
+    #     neu_state = domain.color_neutral_to(state)
+    #     for sym in range(24):
+    #         assert (neu_state[sym][:3] == state[:3]).all()
+    #         if rep == 4:
+    #             domain.render_subplot(3, 24, sym + 1 + 0*24, ori_solved[sym])
+    #             domain.render_subplot(3, 24, sym + 1 + 1*24, ori_state[sym])
+    #             domain.render_subplot(3, 24, sym + 1 + 2*24, neu_state[sym])
+    # pt.show()

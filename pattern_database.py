@@ -4,7 +4,7 @@ import numpy as np
 # grounded or wildcard
 class PatternDatabase:
 
-    def __init__(self, patterns, wildcard, macros, domain, orientation_neutral=True):
+    def __init__(self, patterns, wildcard, macros, domain, orientation_neutral=False):
         # macros[i] is action sequence for patterns[i]
         # patterns[i,j]: 1 <= v <= 6 matches specific color in state
         # patterns[i,j] need not match if wildcard[i,j] == 1
@@ -81,7 +81,7 @@ class PatternDatabase:
 
     def result(self): # assumes match was not False
         m = self.match_index[0] # what about multiple matches?
-        return self.syms[m], list(self.macros[m])
+        return self.syms[m], tuple(self.macros[m])
 
 
 if __name__ == "__main__":
