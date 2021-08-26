@@ -1,10 +1,27 @@
 import numpy as np
+from pattern_database import PatternDatabase
+from algorithm import run
 import matplotlib.pyplot as pt
+
+def pdb_query(state, patterns, wildcards):
+
+    # # brute
+    # # index = np.flatnonzero(((state == patterns) | wildcards).all(axis=1))
+    # index = np.flatnonzero(((state[3:] == patterns[:,3:]) | wildcards[:,3:]).all(axis=1)) # first three facies invariant
+
+    # progressive
+    index = np.flatnonzero((state[3] == patterns[:,3]) | wildcards[:,3]) # first three facies invariant
+    for k in range(4, patterns.shape[1]):
+        if len(index) == 0: return index
+        index = index[(state[k] == patterns[index, k]) | wildcards[index, k]]
+
+    return index
 
 class Constructor:
 
-    def __init__(self, max_rules, rng, domain, tree, max_depth, use_safe_depth, color_neutral):
+    def __init__(self, max_rules, max_incs, rng, domain, tree, max_depth, use_safe_depth, color_neutral):
         self.max_rules = max_rules
+        self.max_incs = max_incs
         self.domain = domain
         self.rng = rng
         self.tree = tree
@@ -21,19 +38,32 @@ class Constructor:
         self.macros[0] = ()
 
         self.num_rules = 1
+        self.num_incs = 1
+
+        # progress logging
+        self.inc_added = np.ones(max_rules, dtype=int) * (max_incs + 1)
+        self.inc_disabled = np.ones(self.wildcards.shape, dtype=int) * (max_incs + 1)
+        self.inc_added[0] = 0
+        self.inc_disabled[0] = 0
+
+    def logs(self):
+        return self.num_rules, self.num_incs, self.inc_added[:self.num_rules], self.inc_disabled[:self.num_rules]
 
     def rules(self):
         return self.patterns[:self.num_rules], self.wildcards[:self.num_rules], self.macros[:self.num_rules]
 
     def toggle_wildcard(self, triggered, state, path):
-        patterns, wildcards, macros = self.patterns, self.wildcards, self.macros
+        # patterns, wildcards, macros = self.patterns, self.wildcards, self.macros
+        patterns, wildcards, macros = self.rules()
 
         augmented = False
-        for r in np.flatnonzero(triggered):
+        for r in triggered: # query method
             goodmacro = (len(macros[r]) <= len(path)) and macros[r] == path[:len(macros[r])]
             if not goodmacro:
-                wildcards[r, self.rng.choice(np.flatnonzero(state != patterns[r]))] = False
+                w = self.rng.choice(np.flatnonzero(state != patterns[r]))
+                wildcards[r, w] = False
                 augmented = True
+                self.inc_disabled[r, w] = self.num_incs
 
         return augmented
 
@@ -41,15 +71,20 @@ class Constructor:
 
         augmented = False # becomes True if candidate gets augmented
 
-        patterns = self.patterns[:self.num_rules]
-        wildcards = self.wildcards[:self.num_rules]
-        macros = self.macros[:self.num_rules]
+        # patterns = self.patterns[:self.num_rules]
+        # wildcards = self.wildcards[:self.num_rules]
+        # macros = self.macros[:self.num_rules]
+        patterns, wildcards, macros = self.rules()
 
         # restrict any rules needed so that state will not trigger bad macros
         # proved that neutral recolorings need not be considered in this step
         # (a non-reoriented optimal path to the recoloring exists and will enact the restriction)
-        triggered = ((state == patterns) | wildcards).all(axis=1)
-        augmented |= self.toggle_wildcard(triggered, state, path)
+
+        # triggered = np.flatnonzero(((state == patterns) | wildcards).all(axis=1))
+        triggered = pdb_query(state, patterns, wildcards)
+
+        toggled = self.toggle_wildcard(triggered, state, path)
+        augmented |= toggled
         
         return augmented
 
@@ -58,20 +93,23 @@ class Constructor:
         # due to incomplete tree it must also be triggered within distance to tree_depth
         # otherwise macro_search could exit set where pdb is correct
 
-        patterns = self.patterns[:self.num_rules]
-        wildcards = self.wildcards[:self.num_rules]
-        macros = self.macros[:self.num_rules]
+        # patterns = self.patterns[:self.num_rules]
+        # wildcards = self.wildcards[:self.num_rules]
+        # macros = self.macros[:self.num_rules]
+        patterns, wildcards, macros = self.rules()
 
         safe_depth = max_depth
         if self.use_safe_depth: safe_depth = min(self.max_depth, self.tree.depth() - len(path))
         if self.color_neutral:
             for neighbor in self.tree.states_rooted_at(state, up_to_depth=safe_depth):
                 for recoloring in self.domain.color_neutral_to(neighbor):
-                    triggered = ((recoloring == patterns) | wildcards).all(axis=1).any()
+                    # triggered = ((recoloring == patterns) | wildcards).all(axis=1).any()
+                    triggered = len(pdb_query(recoloring, patterns, wildcards)) > 0
                     if triggered: return True
         else:
             for neighbor in self.tree.states_rooted_at(state, up_to_depth=safe_depth):
-                triggered = ((neighbor == patterns) | wildcards).all(axis=1).any()
+                # triggered = ((neighbor == patterns) | wildcards).all(axis=1).any()
+                triggered = len(pdb_query(neighbor, patterns, wildcards)) > 0
                 if triggered: return True
             # # slower in early profile despite vectorization
             # neighbors = self.tree.states_rooted_at(state, up_to_depth=safe_depth)
@@ -92,6 +130,8 @@ class Constructor:
         self.patterns[self.num_rules] = pattern
         self.wildcards[self.num_rules] = wildcard
         self.macros[self.num_rules] = macro
+        self.inc_added[self.num_rules] = self.num_incs
+        self.inc_disabled[self.num_rules, ~wildcard] = self.num_incs
         self.num_rules += 1
 
     def incorporate(self, state, path):
@@ -100,14 +140,22 @@ class Constructor:
         if not triggered:
             augmented = True
             self.create_new_rule(state, path)
+        self.num_incs += 1
         return augmented
-    
+
+def rewind(patterns, macros, inc_added, inc_disabled, inc):
+    r = np.flatnonzero(inc_added <= inc).max() + 1
+    patterns = patterns[:r]
+    wildcards = (inc_disabled[:r] > inc)
+    macros = macros[:r]
+    return patterns, wildcards, macros
+
 if __name__ == "__main__":
 
     # config
     tree_depth = 11
-    use_safe_depth = False
-    max_depth = 1
+    use_safe_depth = True
+    max_depth = 0
     cube_size = 2
     max_actions = 30
     color_neutral = True
@@ -119,7 +167,7 @@ if __name__ == "__main__":
 
     do_cons = True
     show_results = False
-    confirm = True
+    confirm = False
 
     from cube import CubeDomain
     domain = CubeDomain(cube_size)
@@ -137,17 +185,11 @@ if __name__ == "__main__":
     if do_cons:
 
         max_rules = len(states)
+        max_incs = max_rules * 10
         rng = np.random.default_rng()
-        constructor = Constructor(max_rules, rng, domain, tree, max_depth, use_safe_depth, color_neutral)
-    
-        # # initialize one rule for solved state
-        # patterns = states[:1,:]
-        # wildcards = np.zeros(patterns.shape, dtype=bool)
-        # macros = [()]
-    
-        rule_counts = []
-        wildcard_counts = []
-    
+        constructor = Constructor(max_rules, max_incs, rng, domain, tree, max_depth, use_safe_depth, color_neutral)
+        inc_states = [0] # started with one rule at solved state
+
         done = False
         import itertools as it
         for epoch in it.count():
@@ -155,52 +197,119 @@ if __name__ == "__main__":
             if done: break
             done = True
     
-            for k,s in enumerate(np.random.permutation(range(len(states)))):
-            # for k,s in enumerate(range(len(states))): # solved outwards
-            # for k,s in enumerate(reversed(range(len(states)))): # outwards in
+            shuffler = np.random.permutation(range(len(states)))
+            # shuffler = np.arange(len(states))): # solved outwards
+            # shuffler = np.array(reversed(range(len(states)))): # outwards in
+            for k,s in enumerate(shuffler):
 
-                patterns, wildcards, macros = constructor.rules()
-                if len(macros) in [max_rules, breakpoint]: break
+                if constructor.num_rules in [max_rules, breakpoint]: break
                 if verbose and k % (10**min(3, int(np.log10(k+1)))) == 0:
+                    wildcards = constructor.rules()[1]
                     print("pass %d: %d <= %d rules (%d states), %f wildcard, done=%s (k=%d)" % (
-                        epoch, len(macros), max_rules, len(states), wildcards.sum() / wildcards.size, done, k))
-                rule_counts.append(len(macros))
-                wildcard_counts.append(wildcards.sum())
+                        epoch, constructor.num_rules, max_rules, len(states),
+                        wildcards.sum() / wildcards.size, done, k))
     
                 augmented = constructor.incorporate(states[s], paths[s])
+                inc_states.append(s)
                 if augmented: done = False
                 
-                if len(rule_counts) % dump_period == 0:
-                    with open("consres.pkl","wb") as f: pk.dump((patterns, wildcards, macros, rule_counts, wildcard_counts), f)
+                if k % dump_period == 0:
+                    with open("consres.pkl","wb") as f:
+                        pk.dump((constructor.rules(), constructor.logs(), inc_states), f)
     
         if verbose: print("(max_depth = %d)" % max_depth)
     
         patterns, wildcards, macros = constructor.rules()
-        with open("consres.pkl","wb") as f: pk.dump((patterns, wildcards, macros, rule_counts, wildcard_counts), f)
+        with open("consres.pkl","wb") as f: pk.dump((constructor.rules(), constructor.logs(), inc_states), f)
+
+        # np.set_printoptions(linewidth=200)
+        # for k in range(10): print(patterns[k])
+        # for k in range(10): print(patterns[-k])
 
     if show_results:
-        with open("consres.pkl","rb") as f: (patterns, wildcards, macros, rule_counts, wildcard_counts) = pk.load(f)
-        import matplotlib.pyplot as pt
-        pt.subplot(1,2,1)
-        pt.plot((np.array(rule_counts) + 1))
-        pt.xlabel("iter")
-        pt.ylabel("num rules")
-        pt.subplot(1,2,2)
-        pt.plot((np.array(wildcard_counts) + 1))
-        pt.xlabel("iter")
-        pt.ylabel("num wildcards")
+
+        with open("consres.pkl","rb") as f: (rules, logs, inc_states) = pk.load(f)
+        patterns, wildcards, macros = rules
+        num_rules, num_incs, inc_added, inc_disabled = logs
+
+        bad_triggers = np.cumsum([(inc_disabled[inc_added < i] == i).any() for i in range(num_incs)])
+        no_triggers = np.cumsum([(inc_added == i).any() for i in range(num_incs)])
+        augmented = np.cumsum([(inc_disabled[inc_added < i] == i).any() or (inc_added == i).any() for i in range(num_incs)])
+
+        # pt.subplot(1,3,1)
+        # pt.plot(np.arange(num_incs), [(inc_added <= i).sum() for i in range(num_incs)])
+        # pt.xlabel("iter")
+        # pt.ylabel("num rules")
+        # pt.subplot(1,3,2)
+        # pt.plot(np.arange(num_incs), [(inc_disabled[inc_added <= i] > i).sum() for i in range(num_incs)])
+        # pt.xlabel("iter")
+        # pt.ylabel("num wildcards")
+        # pt.subplot(1,3,3)
+        # pt.plot(np.arange(num_incs), augmented)
+        # pt.plot(np.arange(num_incs), bad_triggers)
+        # pt.plot(np.arange(num_incs), no_triggers)
+        # pt.legend(["aug", "bad trig", "new rule"])
+        # pt.xlabel("iter")
+        # pt.ylabel("num augmentations")
+        # pt.show()
+
+        num_probs = 16
+        cats = ["sofar", "recent", "all"]
+        correctness = {cat: list() for cat in cats}
+        godliness = {cat: list() for cat in cats}
+        folkliness = {cat: list() for cat in cats}
+        converge_inc = np.argmax(np.cumsum(augmented))
+        rewind_incs = np.linspace(num_probs, converge_inc, 30).astype(int)
+        # rewind_incs = np.linspace(num_probs, num_incs, 30).astype(int)
+        for rewind_inc in rewind_incs:
+
+            rew_patterns, rew_wildcards, rew_macros = rewind(patterns, macros, inc_added, inc_disabled, rewind_inc)
+            pdb = PatternDatabase(rew_patterns, rew_wildcards, rew_macros, domain)
+
+            for cat in cats:
+
+                num_solved = 0
+                opt_moves = []
+                alg_moves = []
+            
+                if cat == "sofar": probs = np.random.choice(rewind_inc, size=num_probs) # states so far, up to rewind_inc
+                if cat == "recent": probs = np.arange(rewind_inc-num_probs, rewind_inc) # moving average near rewind_inc
+                if cat == "all": probs = np.random.choice(len(states), size=num_probs) # all states
+
+                for p in probs:
+                    state, path = states[inc_states[p]], paths[inc_states[p]]
+                    solved, plan = run(state, domain, tree, pdb, max_depth, max_actions, color_neutral)
+                    num_solved += solved            
+                    if solved and len(path) > 0:
+                        opt_moves.append(len(path))
+                        alg_moves.append(sum([len(a)+len(m) for a,_,m in plan]))
+                
+                correctness[cat].append( num_solved / num_probs )
+                godliness[cat].append( np.mean( (np.array(opt_moves) + 1) / (np.array(alg_moves) + 1) ) )
+                folkliness[cat].append( 1 -  len(rew_macros) / len(states) )
+
+        for c, cat in enumerate(cats):
+            pt.subplot(1,3, c+1)
+            pt.plot(rewind_incs, correctness[cat], marker='o', label="correctness")
+            pt.plot(rewind_incs, godliness[cat], marker='o', label="godliness")
+            pt.plot(rewind_incs, folkliness[cat], marker='o', label="folkliness")
+            pt.xlabel("num incs")
+            pt.ylabel("performance")
+            pt.ylim([0, 1.1])
+            pt.legend()
+            pt.title(cat)
         pt.show()
 
     # confirm correctness
     if confirm:
-        with open("consres.pkl","rb") as f: (patterns, wildcards, macros, rule_counts, wildcard_counts) = pk.load(f)
+        with open("consres.pkl","rb") as f: (rules, logs, inc_states) = pk.load(f)
+        patterns, wildcards, macros = rules
+        num_rules, num_incs, inc_added, inc_disabled = logs
 
-        from pattern_database import PatternDatabase
-        pdb = PatternDatabase(patterns, wildcards, macros, domain)
-    
-        from algorithm import run
-        import matplotlib.pyplot as pt
-    
+        # rewind = 100
+        # patterns, wildcards, macros = rewind(patterns, macros, inc_added, inc_disabled, rewind)
+
+        pdb = PatternDatabase(patterns, wildcards, macros, domain)    
         num_checked = 0
         num_solved = 0
         opt_moves = []

@@ -134,9 +134,9 @@ if __name__ == "__main__":
     states = np.array(states)
     paths = list(map(tuple, map(domain.reverse, paths))) # from state to solved
     dists = np.array(list(map(len, paths)))
-    if verbose:
-        print("tree layer sizes:")
-        for dep in range(tree_depth): print(len(tree._layers[dep]))
+    # if verbose:
+    #     print("tree layer sizes:")
+    #     for dep in range(tree_depth): print(len(tree._layers[dep]))
 
     # random number generation
     rng = np.random.default_rng()
