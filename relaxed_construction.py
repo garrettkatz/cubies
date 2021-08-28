@@ -239,7 +239,7 @@ if __name__ == "__main__":
     use_safe_depth = False
     max_depth = 1
     max_actions = 30
-    color_neutral = False
+    color_neutral = True
     # breakpoint = 8000
     breakpoint = -1
 
