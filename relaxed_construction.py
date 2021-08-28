@@ -240,20 +240,21 @@ if __name__ == "__main__":
     use_safe_depth = False
     max_depth = 1
     max_actions = 30
-    color_neutral = False
-    # breakpoint = 8000
-    breakpoint = -1
-
-    dump_period = 1000
-    verbose = True
+    color_neutral = True
 
     num_problems = 32
+
+    breakpoint = -1
+    # breakpoint = 100
+    num_reps = 1
+    verbose = True
 
     do_cons = True
     show_results = False
     confirm = True
 
     # set up descriptive dump name
+    dump_period = 1000
     dump_dir = "rcons"
     dump_base = "N%da%dq%d_D%d_M%d_cn%d" % (cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral)
 
@@ -270,63 +271,65 @@ if __name__ == "__main__":
     states = tree.states_rooted_at(init)
     paths = tuple(map(tuple, map(domain.reverse, tree.paths()))) # from state to solved
 
+    max_rules = len(states)
+
     import pickle as pk
     import os
+    import itertools as it
 
     if do_cons:
 
-        max_rules = len(states)
-        rng = np.random.default_rng()
-        constructor = Constructor(max_rules, rng, domain, tree, max_depth, max_actions, use_safe_depth, color_neutral)
-        inc_states = [0] # started with one rule at solved state
+        for rep in range(num_reps):
 
-        rep = 0
-        done = False
-        import itertools as it
-        for epoch in it.count():
-            if constructor.num_rules in [max_rules, breakpoint]: break
-            if done: break
-            done = True
+            rng = np.random.default_rng()
+            constructor = Constructor(max_rules, rng, domain, tree, max_depth, max_actions, use_safe_depth, color_neutral)
+            inc_states = [0] # started with one rule at solved state
     
-            shuffler = np.random.permutation(range(len(states)))
-            # shuffler = np.arange(len(states))): # solved outwards
-            # shuffler = np.array(reversed(range(len(states)))): # outwards in
-            for k,s in enumerate(shuffler):
-
+            done = False
+            for epoch in it.count():
                 if constructor.num_rules in [max_rules, breakpoint]: break
-                if verbose and k % (10**min(3, int(np.log10(k+1)))) == 0:
-                # if verbose:
-
-                    probs = [(states[p], paths[p]) for p in np.random.choice(len(states), size = num_problems)]
-                    correctness, godliness, _ = constructor.evaluate(probs)
-
-                    wildcards = constructor.rules()[1]
-                    print("%d,%d: %d <= %d rules (%d states), %f solved, %f godly, %f wildcard, done=%s" % (
-                        epoch, k, constructor.num_rules, max_rules, len(states),
-                        correctness, godliness,
-                        wildcards.sum() / wildcards.size, done))
+                if done: break
+                done = True
+        
+                shuffler = np.random.permutation(range(len(states)))
+                # shuffler = np.arange(len(states))): # solved outwards
+                # shuffler = np.array(reversed(range(len(states)))): # outwards in
+                for k,s in enumerate(shuffler):
     
-                augmented = constructor.incorporate(states[s], paths[s])
-                inc_states.append(s)
-                if augmented: done = False
-                
-                if k % dump_period == 0:
-                    dump_name = "%s_r%d" % (dump_base, rep)
-                    with open(dump_name + ".pkl", "wb") as f:
-                        pk.dump((constructor.rules(), constructor.logs(), inc_states), f)
+                    if constructor.num_rules in [max_rules, breakpoint]: break
+                    if verbose and k % (10**min(3, int(np.log10(k+1)))) == 0:
+                    # if verbose:
     
-        if verbose: print("(max_depth = %d)" % max_depth)
-
-        dump_name = "%s_r%d" % (dump_base, rep)
-        print(dump_name)
-        with open(dump_name + ".pkl", "wb") as f:
-            pk.dump((constructor.rules(), constructor.logs(), inc_states), f)
-        os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
-
-        # patterns, wildcards, macros = constructor.rules()
-        # np.set_printoptions(linewidth=200)
-        # for k in range(10): print(patterns[k])
-        # for k in range(10): print(patterns[-k])
+                        probs = [(states[p], paths[p]) for p in np.random.choice(len(states), size = num_problems)]
+                        correctness, godliness, _ = constructor.evaluate(probs)
+    
+                        wildcards = constructor.rules()[1]
+                        print("%d,%d,%d: %d <= %d rules (%d states), %f solved, %f godly, %f wildcard, done=%s" % (
+                            rep, epoch, k, constructor.num_rules, max_rules, len(states),
+                            correctness, godliness,
+                            wildcards.sum() / wildcards.size, done))
+        
+                    augmented = constructor.incorporate(states[s], paths[s])
+                    inc_states.append(s)
+                    if augmented: done = False
+                    
+                    if k % dump_period == 0:
+                        dump_name = "%s_r%d" % (dump_base, rep)
+                        with open(dump_name + ".pkl", "wb") as f:
+                            pk.dump((constructor.rules(), constructor.logs(), inc_states), f)
+        
+            if verbose: print("(max_depth = %d)" % max_depth)
+    
+            dump_name = "%s_r%d" % (dump_base, rep)
+            print(dump_name)
+            with open(dump_name + ".pkl", "wb") as f:
+                pk.dump((constructor.rules(), constructor.logs(), inc_states), f)
+            os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
+    
+            # patterns, wildcards, macros = constructor.rules()
+            # np.set_printoptions(linewidth=200)
+            # for k in range(10): print(patterns[k])
+            # for k in range(10): print(patterns[-k])
 
     if show_results:
 
@@ -442,7 +445,7 @@ if __name__ == "__main__":
 
     # confirm correctness
     if confirm:
-        rep = 0
+        rep = np.random.choice(num_reps)
         dump_name = "%s_r%d" % (dump_base, rep)
         with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, inc_states) = pk.load(f)
         patterns, wildcards, macros = rules
