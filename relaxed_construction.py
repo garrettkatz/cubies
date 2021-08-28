@@ -49,7 +49,8 @@ class Constructor:
 
             # check if trigger is first link of a failed algorithm macro chain
             new_state = self.domain.execute(macros[r], state)
-            solved, plan, rules, triggerers = run(new_state, self.domain, self.tree, pdb, self.max_depth, self.max_actions, self.color_neutral)
+            max_actions = self.max_actions - len(macros[r]) - self.max_depth # subtract steps for first macro and its neighborhood
+            solved, plan, rules, triggerers = run(new_state, self.domain, self.tree, pdb, self.max_depth, max_actions, self.color_neutral)
 
             if not solved:
 
@@ -239,7 +240,7 @@ if __name__ == "__main__":
     use_safe_depth = False
     max_depth = 1
     max_actions = 30
-    color_neutral = True
+    color_neutral = False
     # breakpoint = 8000
     breakpoint = -1
 
@@ -455,10 +456,10 @@ if __name__ == "__main__":
         num_solved = 0
         opt_moves = []
         alg_moves = []
-        probs = [
-            (((1,1,2),), domain.perform((1,1,2), domain.solved_state())),
-            (((2,1,2),), domain.perform((2,1,2), domain.solved_state())),
-        ]        
+        # probs = [
+        #     (((1,1,2),), domain.perform((1,1,2), domain.solved_state())),
+        #     (((2,1,2),), domain.perform((2,1,2), domain.solved_state())),
+        # ]
         probs = tree.rooted_at(init)
         for p, (path, prob_state) in enumerate(probs):
             num_checked += 1
@@ -472,12 +473,15 @@ if __name__ == "__main__":
                 if color_neutral: state = domain.color_neutral_to(state)[sym]
                 state = domain.execute(actions, state)
                 state = domain.execute(macro, state)
+            final_state = state
     
             if len(path) > 0:
                 opt_moves.append(len(path))
                 alg_moves.append(sum([len(a)+len(m) for _,a,m in plan]))
     
-            if not domain.is_solved_in(state):
+            if not solved:
+
+                print("num actions:", sum([len(a)+len(m) for _,a,m in plan]))
 
                 numcols = 20
                 numrows = 6
@@ -512,8 +516,8 @@ if __name__ == "__main__":
                         sp += 1
 
                     ax = domain.render_subplot(numrows,numcols, sp, patterns[rule_indices[p]] * (1 - wildcards[rule_indices[p]]))
-                    ax.set_title("trigger")
-                    sp += 1                    
+                    ax.set_title("trig " + str(chain_lengths[rule_indices[p]]))
+                    sp += 1
 
                     ax = domain.render_subplot(numrows,numcols, sp, patterns[rule_indices[p]])
                     ax.set_title("pattern")
@@ -528,6 +532,7 @@ if __name__ == "__main__":
     
                 pt.show()
     
+            assert solved == domain.is_solved_in(final_state)
             assert solved
     
         alg_moves = np.array(alg_moves[1:]) # skip solved state from metrics
