@@ -152,11 +152,14 @@ def rewind(patterns, macros, inc_added, inc_disabled, inc):
 
 if __name__ == "__main__":
 
+    cube_size, num_twist_axes, quarter_turns = 2, 2, True # 29k states
+
     # config
-    tree_depth = 11
-    use_safe_depth = True
-    max_depth = 0
-    cube_size = 2
+    # tree_depth = 11
+    # use_safe_depth = True
+    tree_depth = 15
+    use_safe_depth = False
+    max_depth = 1
     max_actions = 30
     color_neutral = True
     # breakpoint = 8000
@@ -165,12 +168,14 @@ if __name__ == "__main__":
     dump_period = 1000
     verbose = True
 
-    do_cons = True
+    do_cons = False
     show_results = False
-    confirm = False
+    confirm = True
 
+    import itertools as it
     from cube import CubeDomain
-    domain = CubeDomain(cube_size)
+    valid_actions = tuple(it.product(range(num_twist_axes), range(1,cube_size), range(2-quarter_turns, 4, 2-quarter_turns)))
+    domain = CubeDomain(cube_size, valid_actions)
     init = domain.solved_state()
 
     from tree import SearchTree
@@ -318,7 +323,8 @@ if __name__ == "__main__":
             num_checked += 1
             if verbose and p % (10**min(3, int(np.log10(p+1)))) == 0: print("checked %d of %d" % (num_checked, len(states)))
     
-            solved, plan = run(prob_state, domain, tree, pdb, max_depth, max_actions, color_neutral)
+            # solved, plan = run(prob_state, domain, tree, pdb, max_depth, max_actions, color_neutral)
+            solved, plan, _, _ = run(prob_state, domain, tree, pdb, max_depth, max_actions, color_neutral)
             num_solved += solved
 
             state = prob_state

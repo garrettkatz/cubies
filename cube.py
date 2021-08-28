@@ -180,7 +180,10 @@ class CubeDomain:
         self._valid_actions = valid_actions
     
     def god_number(self):
-        return 11 if self.N == 2 else 20
+        if self.N == 2:
+            if len(self._valid_actions) == 6: return 13
+            return 11
+        return 20
 
     def state_size(self):
         return self._solved_state.size

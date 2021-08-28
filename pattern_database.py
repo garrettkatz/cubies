@@ -1,6 +1,21 @@
 import itertools as it
 import numpy as np
 
+def pdb_query(state, patterns, wildcards):
+
+    # brute
+    if len(patterns) < 10000:
+        index = np.flatnonzero(((state[3:] == patterns[:,3:]) | wildcards[:,3:]).all(axis=1)) # first three facies invariant
+
+    # progressive
+    else:
+        index = np.flatnonzero((state[3] == patterns[:,3]) | wildcards[:,3]) # first three facies invariant
+        for k in range(4, patterns.shape[1]):
+            if len(index) == 0: return index
+            index = index[(state[k] == patterns[index, k]) | wildcards[index, k]]
+
+    return index
+
 # grounded or wildcard
 class PatternDatabase:
 
@@ -48,12 +63,23 @@ class PatternDatabase:
         self.num_queries = 0
 
     def query(self, state):
+        index = pdb_query(state, self.patterns, self.wildcard)
 
-        # fast brute
-        self.match_mask = ((self.patterns == state) | (self.wildcard)).all(axis=1)
-        self.match_index = (self.match_mask.argmax(),)
-        self.matched = self.match_mask[self.match_index[0]]
+        # self.match_mask = np.zeros(len(patterns), dtype=bool)
+        # self.match_mask[index] = True
+        self.match_index = tuple(index[:1])
+        self.matched = len(index) > 0
+        # if self.matched:
+        #     print("matched index:")
+        #     print(index)
+        #     print(self.match_index)
         return self.matched
+
+        # # fast brute
+        # self.match_mask = ((self.patterns == state) | (self.wildcard)).all(axis=1)
+        # self.match_index = (self.match_mask.argmax(),)
+        # self.matched = self.match_mask[self.match_index[0]]
+        # return self.matched
 
         # # brute query
         # hits = (self.patterns == state) | (self.wildcard)
@@ -81,7 +107,8 @@ class PatternDatabase:
 
     def result(self): # assumes match was not False
         m = self.match_index[0] # what about multiple matches?
-        return self.syms[m], tuple(self.macros[m])
+        return m
+        # return self.syms[m], tuple(self.macros[m])
 
 
 if __name__ == "__main__":

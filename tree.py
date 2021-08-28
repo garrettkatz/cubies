@@ -84,46 +84,54 @@ class SearchTree:
     #             yield actions, state[permutation]
 
 if __name__ == "__main__":
-    
+
+    import itertools as it
+    cube_size, num_twist_axes, quarter_turns = 2, 3, True # maxdep 11, 3.6M states
+    # cube_size, num_twist_axes, quarter_turns = 2, 3, False # maxdep 3, 24 states
+    # cube_size, num_twist_axes, quarter_turns = 2, 2, True # maxdep 13, 29160 states
+    # cube_size, num_twist_axes, quarter_turns = 2, 2, False # maxdep 2, 6 states
+    valid_actions = tuple(it.product(range(num_twist_axes), range(1,cube_size), range(2-quarter_turns, 4, 2-quarter_turns)))
+
     from cube import CubeDomain
-    domain = CubeDomain(2)
+    domain = CubeDomain(cube_size, valid_actions)
     A = len(list(domain.valid_actions(domain.solved_state())))
 
     # tree = SearchTree(domain, max_depth=2)
     # print(tree.layers)
 
-    tree = SearchTree(domain, max_depth=4) # 5 uses up 4+ GB memory
+    tree = SearchTree(domain, max_depth=15) # 5 uses up 4+ GB memory for 3cube
     for depth in range(len(tree._count)-1):
-        print(tree._count[depth+1] - tree._count[depth], A**(depth+1))
+        print(depth, tree._count[depth+1], tree._count[depth+1] - tree._count[depth], A**(depth+1))
 
-    # slow
-    for rep in range(10):
-        x = 0
-        for action, permutation in tree:
-            x += (permutation > 10).sum()
-    print(x)
+    # #### profile different tree iteration methods
+    # # slow
+    # for rep in range(10):
+    #     x = 0
+    #     for action, permutation in tree:
+    #         x += (permutation > 10).sum()
+    # print(x)
 
-    # fast
-    for rep in range(10):
-        x = (tree.permutations() > 10).sum()
-    print(x)
+    # # fast
+    # for rep in range(10):
+    #     x = (tree.permutations() > 10).sum()
+    # print(x)
 
-    for rep in range(20):    
-        states_slow = np.stack([state for path, state in tree.rooted_at(domain.solved_state())])
-    print("slow", states_slow.shape)
-    for rep in range(20):
-        states_fast = tree.states_rooted_at(domain.solved_state())
-    print("fast", states_fast.shape)
-    assert (states_slow == states_fast).all()
+    # for rep in range(20):    
+    #     states_slow = np.stack([state for path, state in tree.rooted_at(domain.solved_state())])
+    # print("slow", states_slow.shape)
+    # for rep in range(20):
+    #     states_fast = tree.states_rooted_at(domain.solved_state())
+    # print("fast", states_fast.shape)
+    # assert (states_slow == states_fast).all()
 
-    # measure color neutrality savings
-    for depth in range(tree.depth()+1):
-        explored_neutral = set()
-        states = tree.states_rooted_at(domain.solved_state(), up_to_depth=depth)
-        for state in states:
-            if not any([neut.tobytes() in explored_neutral for neut in domain.color_neutral_to(state)]):
-                explored_neutral.add(state.tobytes())
-        print(depth, len(explored_neutral), len(states))
+    # # measure color neutrality savings
+    # for depth in range(tree.depth()+1):
+    #     explored_neutral = set()
+    #     states = tree.states_rooted_at(domain.solved_state(), up_to_depth=depth)
+    #     for state in states:
+    #         if not any([neut.tobytes() in explored_neutral for neut in domain.color_neutral_to(state)]):
+    #             explored_neutral.add(state.tobytes())
+    #     print(depth, len(explored_neutral), len(states))
 
     # tree = paths(domain, new_actions)
 
