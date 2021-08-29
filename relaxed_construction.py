@@ -240,13 +240,13 @@ if __name__ == "__main__":
     use_safe_depth = False
     max_depth = 1
     max_actions = 30
-    color_neutral = True
+    color_neutral = False
 
     num_problems = 32
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 1
+    num_reps = 5
     verbose = True
 
     do_cons = True
