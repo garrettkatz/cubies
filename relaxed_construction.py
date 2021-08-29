@@ -237,7 +237,7 @@ class Constructor:
             num_solved += solved
             opt_bound = min(self.domain.god_number(), len(path))
             alg_moves = sum([len(a)+len(m) for _,a,m in plan])
-            godlinesses.append(0 if not solved else (opt_bound+1) / (alg_moves+1))
+            godlinesses.append(0 if not solved else (opt_bound+1) / (alg_moves+1)) # flawed if path is suboptimal
         
         correctness = num_solved / len(probs)
         godliness = np.mean(godlinesses)

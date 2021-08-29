@@ -181,6 +181,7 @@ class CubeDomain:
     
     def god_number(self):
         if self.N == 2:
+            if len(self._valid_actions) == 3: return 4
             if len(self._valid_actions) == 6: return 13
             return 11
         return 20

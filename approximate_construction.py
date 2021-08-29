@@ -1,6 +1,29 @@
 import numpy as np
-from relaxed_construction import Constructor
+from relaxed_construction import Constructor, rewind
 from utils import softmax
+from pattern_database import PatternDatabase
+from algorithm import run
+import matplotlib.pyplot as pt
+
+def scrambled(domain, rng, max_scramble_length):
+    # make scrambled path and state
+    # make sure all states reachable (fixed scramble length might violate this)
+    # make sure all paths are <= max_actions - max_depth so that new rule creation is always possible
+    probs = np.arange(max_scramble_length+1, dtype=float)
+    probs /= probs.sum()
+    def scrambled_sample():
+        scramble_length = rng.choice(max_scramble_length + 1, p=probs)
+        scramble = list(map(tuple, rng.choice(domain.valid_actions(), size=scramble_length)))
+        state = domain.execute(scramble, domain.solved_state())
+        path = domain.reverse(scramble)
+        return state, path
+    return scrambled_sample
+
+def uniform(rng, states, paths):
+    def uniform_sample():
+        k = rng.choice(len(states))
+        return states[k], paths[k]
+    return uniform_sample
 
 if __name__ == "__main__":
 
@@ -14,14 +37,18 @@ if __name__ == "__main__":
     max_actions = 30
     color_neutral = False
 
-    static_incs_for_stop = 512
-
+    static_incs_for_stop = 256
     num_problems = 32
+    eval_period = 1000
+    correctness_bar = 0.9
+    inc_sampler = "scrambled"
+    eval_samplers = ["scrambled", "uniform"]
+    assert inc_sampler in eval_samplers
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 5
-    break_seconds = 1 * 60
+    num_reps = 16
+    break_seconds = 5 * 60
     verbose = True
 
     do_cons = True
@@ -32,8 +59,12 @@ if __name__ == "__main__":
     # set up descriptive dump name
     dump_period = 1000
     dump_dir = "acons"
-    dump_base = "N%da%dq%d_D%d_M%d_cn%d" % (
-        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral)
+    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s" % (
+        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler)
+    # dump_base = "N%da%dq%d_D%d_M%d_cn%d" % (
+    #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral)
+    # dump_base = "N%da%dq%d_D%d_M%d_cn%d_T%d" % (
+    #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, static_incs_for_stop)
 
     import itertools as it
     from cube import CubeDomain
@@ -47,6 +78,8 @@ if __name__ == "__main__":
     
     all_states = tree.states_rooted_at(init)
     optimal_paths = tuple(map(tuple, map(domain.reverse, tree.paths()))) # from state to solved
+
+    max_scramble_length = max_actions - max_depth
 
     max_rules = len(all_states)
 
@@ -63,22 +96,29 @@ if __name__ == "__main__":
             constructor = Constructor(max_rules, rng, domain, tree, max_depth, max_actions, use_safe_depth, color_neutral)
             inc_states = {domain.solved_state().tobytes(): [0]}
 
+            uniform_sample = uniform(rng, all_states, optimal_paths)
+            scrambled_sample = scrambled(domain, rng, max_scramble_length)
+            
+            scrambled_objectives = []
+            uniform_objectives = []
+
             static_incs = 0
+            max_static_incs = 0
             for k in it.count():
                 if constructor.num_rules in [max_rules, breakpoint]: break
-                if static_incs == static_incs_for_stop: break
+                # if static_incs == static_incs_for_stop: break
 
-                # make scrambled path and state
-                # make sure all states reachable (fixed scramble length might violate this)
-                # make sure all paths are <= max_actions - max_depth so that new rule creation is always possible
-                max_scramble_length = max_actions - max_depth
-                # probs = softmax(np.arange(max_scramble_length+1))
-                probs = np.arange(max_scramble_length+1, dtype=float)
-                probs /= probs.sum()
-                scramble_length = rng.choice(max_scramble_length + 1, p=probs)
-                scramble = list(map(tuple, rng.choice(domain.valid_actions(), size=scramble_length)))
-                state = domain.execute(scramble, domain.solved_state())
-                path = domain.reverse(scramble)
+                # max_scramble_length = max_actions - max_depth
+                # # probs = softmax(np.arange(max_scramble_length+1))
+                # probs = np.arange(max_scramble_length+1, dtype=float)
+                # probs /= probs.sum()
+                # scramble_length = rng.choice(max_scramble_length + 1, p=probs)
+                # scramble = list(map(tuple, rng.choice(domain.valid_actions(), size=scramble_length)))
+                # state = domain.execute(scramble, domain.solved_state())
+                # path = domain.reverse(scramble)
+
+                if inc_sampler == "scrambled": state, path = scrambled_sample()
+                if inc_sampler == "uniform": state, path = uniform_sample()
 
                 state_bytes = state.tobytes()
                 if state_bytes not in inc_states: inc_states[state_bytes] = []
@@ -89,30 +129,41 @@ if __name__ == "__main__":
                     static_incs = 0
                 else:
                     static_incs += 1
+                    max_static_incs = max(max_static_incs, static_incs)
 
-                if verbose and k % (10**min(3, int(np.log10(k+1)))) == 0:
-                # if verbose:
+                if k % eval_period == 0:
 
-                    probs = [(all_states[p], optimal_paths[p]) for p in np.random.choice(len(all_states), size = num_problems)]
-                    correctness, godliness, _ = constructor.evaluate(probs)
+                    if "scrambled" in eval_samplers:
+                        probs = [scrambled_sample() for _ in range(num_problems)]
+                        scrambled_objectives.append(constructor.evaluate(probs))
 
-                    wildcards = constructor.rules()[1]
-                    print("%d,%d: %d <= %d rules (%d states), %f solved, %f godly, %f wildcard, static for %d" % (
-                        rep, k, constructor.num_rules, max_rules, len(all_states),
-                        correctness, godliness,
-                        wildcards.sum() / wildcards.size, static_incs))
+                    if "uniform" in eval_samplers:
+                        probs = [uniform_sample() for _ in range(num_problems)]
+                        uniform_objectives.append(constructor.evaluate(probs))
+
+                    if inc_sampler == "scrambled": correctness, godliness, _ = scrambled_objectives[-1]
+                    if inc_sampler == "uniform": correctness, godliness, _ = uniform_objectives[-1]
+
+                    if verbose:
+                        wildcards = constructor.rules()[1]
+                        print("%d,%d: %d <= %d rules (%d states), %f solved, %f godly, %f wildcard, static for %d" % (
+                            rep, k, constructor.num_rules, max_rules, len(all_states),
+                            correctness, godliness,
+                            wildcards.sum() / wildcards.size, static_incs))
+
+                    if correctness >= correctness_bar: break
 
                 if k % dump_period == 0:
                     dump_name = "%s_r%d" % (dump_base, rep)
                     with open(dump_name + ".pkl", "wb") as f:
-                        pk.dump((constructor.rules(), constructor.logs(), inc_states), f)
+                        pk.dump((constructor.rules(), constructor.logs(), (scrambled_objectives, uniform_objectives), inc_states), f)
         
             if verbose: print("(max_depth = %d)" % max_depth)
     
             dump_name = "%s_r%d" % (dump_base, rep)
             print(dump_name)
             with open(dump_name + ".pkl", "wb") as f:
-                pk.dump((constructor.rules(), constructor.logs(), inc_states), f)
+                pk.dump((constructor.rules(), constructor.logs(), (scrambled_objectives, uniform_objectives), inc_states), f)
             os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
     
             # patterns, wildcards, macros = constructor.rules()
@@ -125,16 +176,38 @@ if __name__ == "__main__":
 
     if show_results:
 
-        rep = 0
-        dump_name = "%s_r%d" % (dump_base, rep)
-        print(dump_name)
-        with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, inc_states) = pk.load(f)
-        patterns, wildcards, macros = rules
-        num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
+        for rep in range(num_reps):
+            dump_name = "%s_r%d" % (dump_base, rep)
+            print(dump_name)
+            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, inc_states) = pk.load(f)
+            num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
 
-        # fix for max_incs vestigial
-        # print("remove this!")
-        # inc_disabled[inc_disabled == 10*len(all_states) + 1] = np.iinfo(int).max
+            incs = np.arange(0, num_incs, eval_period)
+            for n, (name, objective) in enumerate(zip(["scrambled","uniform"], objectives)):
+                correctness, godliness, folkliness = zip(*objective)
+                pt.subplot(2,3,n*3 + 1)
+                pt.plot(incs, correctness)
+                pt.ylabel("correctness")
+                pt.title(name)
+                pt.xlabel("incs")
+                pt.subplot(2,3,n*3 + 2)
+                pt.plot(incs, godliness)
+                pt.ylabel("godliness")
+                pt.title(name)
+                pt.xlabel("incs")
+                pt.subplot(2,3,n*3 + 3)
+                pt.plot(incs, folkliness)
+                pt.ylabel("folkliness")
+                pt.title(name)
+                pt.xlabel("incs")
+        pt.show()
+
+        # rep = 0
+        # dump_name = "%s_r%d" % (dump_base, rep)
+        # print(dump_name)
+        # with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, inc_states) = pk.load(f)
+        # patterns, wildcards, macros = rules
+        # num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
 
         # ### show pdb
         # numrows = min(14, len(macros))
@@ -235,92 +308,84 @@ if __name__ == "__main__":
         #     pt.title(cat)
         # pt.show()
 
-        correctness = {}
-        godliness = {}
-        folkliness = {}
+        # correctness = {}
+        # godliness = {}
+        # folkliness = {}
 
-        num_problems = 256
+        # num_problems = 32
 
         # reps = list(range(num_reps))
-        reps = list(range(18)) + list(range(20,25))
-        for rep in reps:
-            print("rep %d..." % rep)
+        # for rep in reps:
+        #     print("rep %d..." % rep)
 
-            dump_name = "%s_r%d" % (dump_base, rep)
-            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, inc_states) = pk.load(f)
-            patterns, wildcards, macros = rules
-            num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
+        #     dump_name = "%s_r%d" % (dump_base, rep)
+        #     with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, inc_states) = pk.load(f)
+        #     patterns, wildcards, macros = rules
+        #     num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
 
-            correctness[rep] = []
-            godliness[rep] = []
-            folkliness[rep] = []
+        #     correctness[rep] = []
+        #     godliness[rep] = []
+        #     folkliness[rep] = []
 
-            rewind_incs = np.linspace(num_problems, num_incs, 64).astype(int)
-            for rewind_inc in rewind_incs:
+        #     rewind_incs = np.linspace(num_problems, num_incs, 32).astype(int)
+        #     for rewind_inc in rewind_incs:
 
-                rew_patterns, rew_wildcards, rew_macros = rewind(patterns, macros, inc_added, inc_disabled, rewind_inc)
-                pdb = PatternDatabase(rew_patterns, rew_wildcards, rew_macros, domain)
-                probs = np.random.choice(len(all_states), size=num_problems) # all states
+        #         rew_patterns, rew_wildcards, rew_macros = rewind(patterns, macros, inc_added, inc_disabled, rewind_inc)
+        #         pdb = PatternDatabase(rew_patterns, rew_wildcards, rew_macros, domain)
+        #         probs = np.random.choice(len(all_states), size=num_problems) # all states
 
-                num_solved = 0
-                opt_moves = []
-                alg_moves = []
+        #         num_solved = 0
+        #         opt_moves = []
+        #         alg_moves = []
             
-                for p in probs:
-                    state, path = states[p], paths[p]
-                    solved, plan, _, _ = run(state, domain, tree, pdb, max_depth, max_actions, color_neutral)
-                    num_solved += solved            
-                    if solved and len(path) > 0:
-                        opt_moves.append(len(path))
-                        alg_moves.append(sum([len(a)+len(m) for _,a,m in plan]))
+        #         for p in probs:
+        #             state, path = all_states[p], optimal_paths[p]
+        #             solved, plan, _, _ = run(state, domain, tree, pdb, max_depth, max_actions, color_neutral)
+        #             num_solved += solved            
+        #             if solved and len(path) > 0:
+        #                 opt_moves.append(len(path))
+        #                 alg_moves.append(sum([len(a)+len(m) for _,a,m in plan]))
                 
-                correctness[rep].append( num_solved / num_problems )
-                godliness[rep].append( np.mean( (np.array(opt_moves) + 1) / (np.array(alg_moves) + 1) ) )
-                folkliness[rep].append( 1 -  len(rew_macros) / len(all_states) )
+        #         correctness[rep].append( num_solved / num_problems )
+        #         godliness[rep].append( np.mean( (np.array(opt_moves) + 1) / (np.array(alg_moves) + 1) ) )
+        #         # folkliness[rep].append( 1 -  len(rew_macros) / len(all_states) )
+        #         folkliness[rep].append( len(rew_macros) )
 
-        for sp, metric in enumerate(["correctness", "godliness", "folkliness"]):
-            pt.subplot(1,4, sp+1)
-            for rep in reps: pt.plot(rewind_incs, locals()[metric][rep], '-', label=str(rep))
-            pt.ylabel(metric)
-            pt.xlabel("inc")
-            pt.ylim([0, 1.1])
-            pt.legend()
+        # for sp, metric in enumerate(["correctness", "godliness", "folkliness"]):
+        #     pt.subplot(1,4, sp+1)
+        #     for rep in reps: pt.plot(rewind_incs, locals()[metric][rep], '-', label=str(rep))
+        #     pt.ylabel(metric)
+        #     pt.xlabel("inc")
+        #     # pt.ylim([0, 1.1])
+        #     pt.legend()
 
-        pt.subplot(1,4,4)
-        for rep in reps:
-            pt.scatter(folkliness[rep][-1], godliness[rep][-1], color='k')
-        pt.xlabel("folkliness")
-        pt.ylabel("godliness")
-        pt.xlim([0, 1.1])
-        pt.ylim([0, 1.1])
+        # pt.subplot(1,4,4)
+        # for rep in reps:
+        #     pt.scatter(folkliness[rep][-1], godliness[rep][-1], color='k')
+        # pt.xlabel("folkliness")
+        # pt.ylabel("godliness")
+        # # pt.xlim([0, 1.1])
+        # # pt.ylim([0, 1.1])
 
-        # pt.tight_layout()
-        pt.show()
+        # # pt.tight_layout()
+        # pt.show()
 
     # confirm correctness
     if confirm:
 
-        from pattern_database import PatternDatabase
-        from algorithm import run
-        import matplotlib.pyplot as pt
-
-        # for rep in [np.random.choice(num_reps)]:
         for rep in range(num_reps):
-        # for rep in list(range(18)) + list(range(20,25)):
 
             dump_name = "%s_r%d" % (dump_base, rep)
-            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, inc_states) = pk.load(f)
+            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, inc_states) = pk.load(f)
             patterns, wildcards, macros = rules
             num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
-    
-            # rewind = 100
-            # patterns, wildcards, macros = rewind(patterns, macros, inc_added, inc_disabled, rewind)
-    
+
             pdb = PatternDatabase(patterns, wildcards, macros, domain)    
             num_checked = 0
             num_solved = 0
             opt_moves = []
             alg_moves = []
+
             # probs = [
             #     (((1,1,2),), domain.perform((1,1,2), domain.solved_state())),
             #     (((2,1,2),), domain.perform((2,1,2), domain.solved_state())),
