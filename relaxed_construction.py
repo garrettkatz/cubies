@@ -246,7 +246,8 @@ if __name__ == "__main__":
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 5
+    num_reps = 20
+    break_seconds = 10 * 60
     verbose = True
 
     do_cons = True
@@ -278,6 +279,8 @@ if __name__ == "__main__":
     import itertools as it
 
     if do_cons:
+
+        from time import sleep
 
         for rep in range(num_reps):
 
@@ -330,6 +333,9 @@ if __name__ == "__main__":
             # np.set_printoptions(linewidth=200)
             # for k in range(10): print(patterns[k])
             # for k in range(10): print(patterns[-k])
+
+            if verbose: print("Breaking for %s seconds..." % str(break_seconds))
+            sleep(break_seconds)
 
     if show_results:
 
