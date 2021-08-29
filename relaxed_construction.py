@@ -242,6 +242,9 @@ if __name__ == "__main__":
     max_actions = 30
     color_neutral = False
 
+    state_sampling = "bfs"
+    # state_sampling = "uniform"
+
     num_problems = 32
 
     breakpoint = -1
@@ -257,7 +260,8 @@ if __name__ == "__main__":
     # set up descriptive dump name
     dump_period = 1000
     dump_dir = "rcons"
-    dump_base = "N%da%dq%d_D%d_M%d_cn%d" % (cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral)
+    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s" % (
+        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, state_sampling)
 
     import itertools as it
     from cube import CubeDomain
@@ -276,7 +280,6 @@ if __name__ == "__main__":
 
     import pickle as pk
     import os
-    import itertools as it
 
     if do_cons:
 
@@ -294,9 +297,9 @@ if __name__ == "__main__":
                 if done: break
                 done = True
         
-                shuffler = np.random.permutation(range(len(states)))
-                # shuffler = np.arange(len(states))): # solved outwards
-                # shuffler = np.array(reversed(range(len(states)))): # outwards in
+                if state_sampling == "uniform": shuffler = np.random.permutation(range(len(states)))
+                if state_sampling == "bfs": shuffler = np.arange(len(states)) # solved outwards
+                # shuffler = np.array(reversed(range(len(states)))) # outwards in
                 for k,s in enumerate(shuffler):
     
                     if constructor.num_rules in [max_rules, breakpoint]: break
