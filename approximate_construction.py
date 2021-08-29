@@ -59,8 +59,8 @@ if __name__ == "__main__":
     # set up descriptive dump name
     dump_period = 1000
     dump_dir = "acons"
-    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s" % (
-        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler)
+    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s_cb%s" % (
+        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler, correctness_bar)
     # dump_base = "N%da%dq%d_D%d_M%d_cn%d" % (
     #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral)
     # dump_base = "N%da%dq%d_D%d_M%d_cn%d_T%d" % (
