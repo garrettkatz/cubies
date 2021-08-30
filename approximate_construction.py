@@ -48,7 +48,7 @@ if __name__ == "__main__":
     breakpoint = -1
     # breakpoint = 100
     num_reps = 16
-    break_seconds = 5 * 60
+    break_seconds = 1 * 60
     verbose = True
 
     do_cons = True

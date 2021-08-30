@@ -53,13 +53,13 @@ if __name__ == "__main__":
     eval_samplers = ["scrambled", "uniform"]
     assert inc_sampler in eval_samplers
 
-    num_candidates = 16
+    num_candidates = 1
     max_select_iters = 10000
     ema_factor = .9
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 10
+    num_reps = 1
     break_seconds = 1 * 60
     # break_seconds = 0
     verbose = True
@@ -99,9 +99,11 @@ if __name__ == "__main__":
 
     if do_cons:
 
-        from time import sleep
+        from time import sleep, perf_counter
 
         for rep in range(num_reps):
+
+            start = perf_counter()
 
             rng = np.random.default_rng()
             constructors = tuple(
@@ -173,13 +175,17 @@ if __name__ == "__main__":
             with open(dump_name + ".pkl", "wb") as f:
                 pk.dump((rules, logs, (scrambled_objectives, uniform_objectives)), f)
             os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
-    
-            if verbose: print("Breaking for %s seconds..." % str(break_seconds))
+
+            if verbose:
+                print("Took %s seconds total." % (perf_counter() - start))
+                print("Breaking for %s seconds..." % str(break_seconds))
+
             sleep(break_seconds)
 
     if show_results:
 
         reps = list(range(3))
+        # reps = list(range(num_reps))
         for rep in reps:
             dump_name = "%s_r%d" % (dump_base, rep)
             print(dump_name)
@@ -193,6 +199,17 @@ if __name__ == "__main__":
                 
                 # incs = np.arange(0, num_incs, eval_period)
                 correctness, godliness, folkliness = zip(*scrambled_objectives[c])
+                correctness = np.array(correctness)
+                godliness = np.array(godliness)
+                folkliness = np.array(folkliness)
+
+                # correctness = correctness / (np.arange(len(correctness)) + 1)
+                # godliness = godliness / (np.arange(len(correctness)) + 1)
+                # folkliness = folkliness / (np.arange(len(correctness)) + 1)
+                
+                for i in range(1, len(correctness)):
+                    correctness[i] = ema_factor*correctness[i-1] + (1-ema_factor)*correctness[i]
+                    godliness[i] = ema_factor*godliness[i-1] + (1-ema_factor)*godliness[i]
                 
                 pt.subplot(len(reps), 3, rep*3 + 1)
                 pt.plot(correctness)
@@ -207,5 +224,29 @@ if __name__ == "__main__":
                 pt.xlabel("evals")
                 pt.ylabel("folkliness")
 
+        pt.show()
+
+        for rep in range(num_reps):
+            dump_name = "%s_r%d" % (dump_base, rep)
+            print(dump_name)
+            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives) = pk.load(f)
+            scrambled_objectives, uniform_objectives = objectives
+
+            correctness = np.array([scrambled_objectives[c][-1][0] for c in range(num_candidates)])
+            godliness = np.array([scrambled_objectives[c][-1][1] for c in range(num_candidates)])
+            folkliness = np.array([scrambled_objectives[c][-1][2] for c in range(num_candidates)])
+            
+            idx = np.argsort(godliness)
+            correctness = correctness[idx]
+            godliness = godliness[idx]
+            folkliness = folkliness[idx]
+
+            # pt.scatter(folkliness[:-1], godliness[:-1], color='b')
+            # pt.scatter(folkliness[-1], godliness[-1], color='k')
+            pt.plot(folkliness[-2:], godliness[-2:], 'ko-')
+            pt.plot(folkliness[:-1], godliness[:-1], 'bo-')
+
+        pt.xlabel("folkliness")
+        pt.ylabel("godliness")
         pt.show()
 
