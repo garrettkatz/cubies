@@ -55,6 +55,7 @@ if __name__ == "__main__":
 
     num_candidates = 16
     max_select_iters = 10000
+    ema_factor = .9
 
     breakpoint = -1
     # breakpoint = 100
@@ -71,8 +72,10 @@ if __name__ == "__main__":
     # set up descriptive dump name
     dump_period = 1000
     dump_dir = "ufp"
-    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s_P%d" % (
-        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler, num_candidates)
+    # dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s_P%d" % (
+    #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler, num_candidates)
+    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s_P%d_e%s" % (
+        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler, num_candidates, ema_factor)
 
     import itertools as it
     from cube import CubeDomain
@@ -144,13 +147,16 @@ if __name__ == "__main__":
                     eval_period, inc_sampler, eval_samplers, scrambled_sample, uniform_sample,
                     constructors[c], scrambled_objectives[c], uniform_objectives[c],
                 )
-                current_objectives[c] = correctness, godliness, folkliness
+                current_objectives[c,:2] *= ema_factor
+                current_objectives[c,:2] += (1 - ema_factor) * np.array([correctness, godliness])
+                current_objectives[c,2] = folkliness
 
                 if verbose:
-                    wildcards = constructors[c].rules()[1]
-                    print("%d,%d: %d selects, %d <= %d rules (%d states), %f solved, %f godly, %f wildcard" % (
+                    print("%d,%d: %d selects, %d <= %d rules (%d states), %f(%f) solved, %f(%f) godly, %f(%f) folkly" % (
                         select_iter, c, selection_counts[c], constructors[c].num_rules, max_rules, len(all_states),
-                        correctness, godliness, wildcards.sum() / wildcards.size))
+                        correctness, current_objectives[c,0], godliness, current_objectives[c,1],
+                        folkliness, current_objectives[c,2],
+                    ))
 
                 dump_name = "%s_r%d" % (dump_base, rep)
                 rules = [constructors[c].rules() for c in range(num_candidates)]
