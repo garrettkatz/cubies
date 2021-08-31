@@ -182,9 +182,9 @@ class Constructor:
 
         pattern = state
 
-        # wildcard = np.ones(pattern.shape, dtype=bool) # start with all wildcards which will gradually be disabled
+        wildcard = np.ones(pattern.shape, dtype=bool) # start with all wildcards which will gradually be disabled
         # wildcard = np.zeros(pattern.shape, dtype=bool) # pdb with no wildcards
-        wildcard = self.rng.uniform(size=pattern.shape) > (1 / len(path)) # more wildcards in deeper states
+        # wildcard = self.rng.uniform(size=pattern.shape) > (1 / len(path)) # more wildcards in deeper states
         # wildcard = (np.random.rand(*pattern.shape) < (len(path) / self.domain.god_number())) # but relies on accurate path length and god_number
 
         # add to pdb
