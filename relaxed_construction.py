@@ -47,6 +47,23 @@ class Constructor:
     def rules(self):
         return self.patterns[:self.num_rules], self.wildcards[:self.num_rules], self.macros[:self.num_rules]
 
+    def copy(self):
+        constructor = Constructor(
+            self.max_rules, self.rng, self.domain, self.tree, self.max_depth, self.max_actions, self.use_safe_depth, self.color_neutral)
+
+        constructor.patterns = self.patterns.copy()
+        constructor.wildcards = self.wildcards.copy()
+        constructor.macros = list(self.macros)
+        constructor.chain_lengths = self.chain_lengths.copy()
+
+        constructor.num_rules =  self.num_rules
+        constructor.num_incs =  self.num_incs
+
+        constructor.inc_added = self.inc_added.copy()
+        constructor.inc_disabled = self.inc_disabled.copy()
+
+        return constructor
+
     def toggle_wildcard(self, triggered, state, path):
         patterns, wildcards, macros = self.rules()
         pdb = PatternDatabase(patterns, wildcards, macros, self.domain)
