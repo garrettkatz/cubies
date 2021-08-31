@@ -7,11 +7,11 @@ from approximate_construction import scrambled, uniform
 import matplotlib.pyplot as pt
 
 def inc_batch(
-    eval_period, inc_sampler, eval_samplers, scrambled_sample, uniform_sample,
+    batch_size, inc_sampler, eval_samplers, scrambled_sample, uniform_sample,
     constructor, scrambled_objectives, uniform_objectives,
 ):
 
-    for k in range(eval_period):
+    for k in range(batch_size):
 
         if constructor.num_rules == constructor.max_rules: break
 
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     color_neutral = False
 
     num_problems = 32
-    eval_period = 1000
+    batch_size = 32
     correctness_bar = 1.0
 
     inc_sampler = "scrambled"
@@ -54,14 +54,14 @@ if __name__ == "__main__":
     assert inc_sampler in eval_samplers
 
     num_candidates = 16
-    max_batch_iters = 1000
+    max_batch_iters = 10000
     ema_factor = .9
     keep_one = int(True)
 
     breakpoint = -1
     # breakpoint = 100
     num_reps = 20
-    break_seconds = 5 * 60
+    break_seconds = 1 * 60
     # break_seconds = 0
     verbose = True
 
@@ -71,12 +71,10 @@ if __name__ == "__main__":
     confirm_show = False
 
     # set up descriptive dump name
-    dump_period = 1000
+    dump_period = 10
     dump_dir = "dtw"
-    # dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s_P%d" % (
-    #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler, num_candidates)
-    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s_P%d_e%s" % (
-        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler, num_candidates, ema_factor)
+    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s_P%d_B%d_e%s" % (
+        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler, num_candidates, batch_size, ema_factor)
 
     import itertools as it
     from cube import CubeDomain
@@ -104,7 +102,7 @@ if __name__ == "__main__":
 
         for rep in range(num_reps):
 
-            start = perf_counter()
+            rep_start = perf_counter()
 
             rng = np.random.default_rng()
             constructors = list(
@@ -121,12 +119,16 @@ if __name__ == "__main__":
             ema_objectives = []
             current_objectives = np.empty((num_candidates, 3))
 
+            batch_times = []
+
             for batch_iter in range(max_batch_iters):
+
+                batch_start = perf_counter()
 
                 # evaluate each candidate
                 for c in range(num_candidates):
                     correctness, godliness, folkliness = inc_batch(
-                        eval_period, inc_sampler, eval_samplers, scrambled_sample, uniform_sample,
+                        batch_size, inc_sampler, eval_samplers, scrambled_sample, uniform_sample,
                         constructors[c], scrambled_objectives[c], uniform_objectives[c],
                     )
                     if batch_iter == 0:
@@ -154,24 +156,31 @@ if __name__ == "__main__":
                 constructors[worst] = constructors[best].copy()
                 current_objectives[worst] = current_objectives[best]
 
-                dump_name = "%s_r%d" % (dump_base, rep)
-                rules = [constructors[c].rules() for c in range(num_candidates)]
-                logs = [constructors[c].logs() for c in range(num_candidates)]
-                with open(dump_name + ".pkl", "wb") as f:
-                    pk.dump((rules, logs, (scrambled_objectives, uniform_objectives), ema_objectives, replacements), f)
+                batch_times.append(perf_counter() - batch_start)
+
+                if batch_iter % dump_period == 0:
+                    dump_name = "%s_r%d" % (dump_base, rep)
+                    rules = [constructors[c].rules() for c in range(num_candidates)]
+                    logs = [constructors[c].logs() for c in range(num_candidates)]
+                    choices = [constructors[c].choices() for c in range(num_candidates)]
+                    with open(dump_name + ".pkl", "wb") as f:
+                        pk.dump((rules, logs, choices, (scrambled_objectives, uniform_objectives), ema_objectives, replacements, batch_times), f)
 
                 if correctness >= correctness_bar: break        
-    
+
+            rep_time = perf_counter() - rep_start
+
             dump_name = "%s_r%d" % (dump_base, rep)
             print(dump_name)
             rules = [constructors[c].rules() for c in range(num_candidates)]
             logs = [constructors[c].logs() for c in range(num_candidates)]
+            choices = [constructors[c].choices() for c in range(num_candidates)]
             with open(dump_name + ".pkl", "wb") as f:
-                pk.dump((rules, logs, (scrambled_objectives, uniform_objectives), ema_objectives, replacements), f)
+                pk.dump((rules, logs, choices, (scrambled_objectives, uniform_objectives), ema_objectives, replacements, batch_times), f)
             os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
 
             if verbose:
-                print("Took %s seconds total." % (perf_counter() - start))
+                print("Took %s seconds total." % rep_time)
                 print("Breaking for %s seconds..." % str(break_seconds))
 
             sleep(break_seconds)
@@ -184,7 +193,7 @@ if __name__ == "__main__":
             dump_name = "%s_r%d" % (dump_base, rep)
             print(dump_name)
             with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f:
-                (rules, logs, objectives, ema_objectives, replacements) = pk.load(f)
+                (rules, logs, choices, objectives, ema_objectives, replacements, batch_times) = pk.load(f)
             scrambled_objectives, uniform_objectives = objectives
             ema_objectives = np.stack(ema_objectives)
     
@@ -195,21 +204,82 @@ if __name__ == "__main__":
                 
                 # correctness, godliness, folkliness = zip(*scrambled_objectives[c])
                 correctness, godliness, folkliness = ema_objectives[:,:,0], ema_objectives[:,:,1], ema_objectives[:,:,2]
-                folkliness = np.array([(inc_added < i).sum() for i in range(0,num_incs, eval_period)])
+                folkliness = np.array([(inc_added < i).sum() for i in range(0,num_incs, batch_size)])
                 
                 pt.subplot(len(reps), 3, rep*3 + 1)
                 pt.plot(correctness)
-                pt.xlabel("evals")
+                pt.xlabel("batches")
                 pt.ylabel("correctness")
                 pt.subplot(len(reps), 3, rep*3 + 2)
                 pt.plot(godliness)
-                pt.xlabel("evals")
+                pt.xlabel("batches")
                 pt.ylabel("godliness")
                 pt.subplot(len(reps), 3, rep*3 + 3)
                 pt.plot(folkliness)
-                pt.xlabel("evals")
+                pt.xlabel("batches")
                 pt.ylabel("folkliness")
 
         pt.show()
+
+        reps = list(range(num_reps))
+        for rep in reps:
+            dump_name = "%s_r%d" % (dump_base, rep)
+            print(dump_name)
+            if not os.path.exists("%s/%s.pkl" % (dump_dir, dump_name)): break
+            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f:
+                (rules, logs, choices, objectives, ema_objectives, replacements, batch_times) = pk.load(f)
+            scrambled_objectives, uniform_objectives = objectives
+            ema_objectives = np.stack(ema_objectives)
+
+            best, worst = replacements[-1]
+            kept = 0
+            _, g, f = 0, 1, 2
+            
+            x = [scrambled_objectives[c][-1][f] for c in [kept, worst, best]]
+            y = [scrambled_objectives[c][-1][g] for c in [kept, worst, best]]
+            
+            pt.plot(x[:2], y[:2], 'ro-')
+            pt.plot(x[1:], y[1:], 'ko-')
+
+        pt.xlabel("folkliness")
+        pt.ylabel("godliness")
+        pt.title("Red kept, to worst to best")
+        pt.show()
+
+        reps = list(range(num_reps))
+        for rep in reps:
+            dump_name = "%s_r%d" % (dump_base, rep)
+            print(dump_name)
+            if not os.path.exists("%s/%s.pkl" % (dump_dir, dump_name)): break
+            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f:
+                (rules, logs, choices, objectives, ema_objectives, replacements, batch_times) = pk.load(f)
+            scrambled_objectives, uniform_objectives = objectives
+            ema_objectives = np.stack(ema_objectives)
+
+            for c in range(num_candidates):
+
+                toggle_link_choices, macro_link_choices = choices[c]
+                _, godliness, folkliness = scrambled_objectives[c][-1]
+
+                ts, lents = zip(*toggle_link_choices)
+                chain_portions = np.array(ts) / np.array(lents)
+
+                pt.subplot(1,3,1)
+                pt.scatter(ts, lents, color='k')
+                pt.xlabel("choice")
+                pt.ylabel("num choices")
+
+                pt.subplot(1,3,2)
+                pt.scatter(chain_portions, [godliness] * len(chain_portions), color='k')
+                pt.xlabel("chain portion")
+                pt.ylabel("godliness")
+
+                pt.subplot(1,3,3)
+                pt.scatter(chain_portions, [folkliness] * len(chain_portions), color='k')
+                pt.xlabel("chain portion")
+                pt.ylabel("folkliness")
+
+        pt.show()
+
 
 

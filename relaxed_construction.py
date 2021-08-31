@@ -41,8 +41,15 @@ class Constructor:
         self.inc_added[0] = 0
         self.inc_disabled[0] = 0
 
+        # logging for heuristics
+        self.toggle_link_choices = []
+        self.macro_link_choices = []
+
     def logs(self):
         return self.num_rules, self.num_incs, self.inc_added[:self.num_rules], self.inc_disabled[:self.num_rules], self.chain_lengths[:self.num_rules]
+
+    def choices(self):
+        return self.toggle_link_choices, self.macro_link_choices
 
     def rules(self):
         return self.patterns[:self.num_rules], self.wildcards[:self.num_rules], self.macros[:self.num_rules]
@@ -61,6 +68,9 @@ class Constructor:
 
         constructor.inc_added = self.inc_added.copy()
         constructor.inc_disabled = self.inc_disabled.copy()
+
+        constructor.toggle_link_choices = list(self.toggle_link_choices)
+        constructor.macro_link_choices = list(self.macro_link_choices)
 
         return constructor
 
@@ -101,27 +111,14 @@ class Constructor:
                 t = self.rng.choice(links_with_wildcards)
                 rule = rules[t]
 
+                self.toggle_link_choices.append((t, len(links_with_wildcards)))
+
                 w = self.rng.choice(np.flatnonzero(triggerers[t] != patterns[rule]))
                 wildcards[rule, w] = False
                 toggled = True
                 self.inc_disabled[rule, w] = self.num_incs
 
         return toggled
-
-    # def toggle_wildcard(self, triggered, state, path):
-    #     # patterns, wildcards, macros = self.patterns, self.wildcards, self.macros
-    #     patterns, wildcards, macros = self.rules()
-
-    #     toggled = False
-    #     for r in triggered: # query method
-    #         goodmacro = (len(macros[r]) <= len(path)) and macros[r] == path[:len(macros[r])]
-    #         if not goodmacro:
-    #             w = self.rng.choice(np.flatnonzero(state != patterns[r]))
-    #             wildcards[r, w] = False
-    #             toggled = True
-    #             self.inc_disabled[r, w] = self.num_incs
-
-    #     return toggled
 
     def restrict_rules(self, state, path):
         patterns, wildcards, macros = self.rules()
@@ -146,31 +143,12 @@ class Constructor:
         else:
             recolorings = state.reshape(1, self.domain.state_size())
 
-        # search all neighbor for triggers
+        # search all neighbors for triggers
         for recoloring in recolorings:
             for neighbor in self.tree.states_rooted_at(recoloring, up_to_depth=safe_depth):
                 triggered = len(pdb_query(neighbor, patterns, wildcards)) > 0
                 if triggered: return True
         return False
-
-    # def has_neighboring_trigger(self, state, path):
-    #     # check if state is in neighborhood of a trigger
-    #     # due to incomplete tree it must also be triggered within distance to tree_depth
-    #     # otherwise macro_search could exit set where pdb is correct
-
-    #     patterns, wildcards, macros = self.rules()
-    #     safe_depth = self.max_depth
-    #     if self.use_safe_depth: safe_depth = min(self.max_depth, self.tree.depth() - len(path))
-    #     if self.color_neutral:
-    #         for neighbor in self.tree.states_rooted_at(state, up_to_depth=safe_depth):
-    #             for recoloring in self.domain.color_neutral_to(neighbor):
-    #                 triggered = len(pdb_query(recoloring, patterns, wildcards)) > 0
-    #                 if triggered: return True
-    #     else:
-    #         for neighbor in self.tree.states_rooted_at(state, up_to_depth=safe_depth):
-    #             triggered = len(pdb_query(neighbor, patterns, wildcards)) > 0
-    #             if triggered: return True
-    #     return False
 
     def create_new_rule(self, state, path):
         patterns, wildcards, macros = self.rules()
@@ -199,6 +177,8 @@ class Constructor:
         k = self.rng.choice(len(new_macro_lengths))
         new_macro = path[:new_macro_lengths[k]]
         new_chain_length = new_macro_lengths[k] + self.chain_lengths[rule_indices[k]]
+
+        self.macro_link_choices.append((k, len(new_macro_lengths), len(new_macro), new_chain_length))
 
         pattern = state
 
