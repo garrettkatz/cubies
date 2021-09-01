@@ -65,8 +65,8 @@ if __name__ == "__main__":
     # break_seconds = 0
     verbose = True
 
-    do_cons = False
-    show_results = True
+    do_cons = True
+    show_results = False
     confirm = False
     confirm_show = False
 
@@ -115,6 +115,11 @@ if __name__ == "__main__":
             scrambled_objectives = tuple([] for _ in range(num_candidates))
             uniform_objectives = tuple([] for _ in range(num_candidates))
 
+            # initial scalarization weights in S+
+            weights = rng.normal(size=2)
+            weights /= np.sqrt(np.sum(weights**2))
+            weights = np.fabs(weights)
+
             replacements = []
             ema_objectives = []
             current_objectives = np.empty((num_candidates, 3))
@@ -140,17 +145,22 @@ if __name__ == "__main__":
 
                 ema_objectives.append(current_objectives.copy())
 
+                # scalarize
+                scalarized = np.maximum(0, current_objectives[:,1:] / weights).min(axis=1)**2 # constructors are axis=0
+                # scalarized = current_objectives[:,1] # godliness
+                # scalarized = current_objectives[:,2] # folkliness
+
                 # replace the worst with copy of the best
-                worst = np.argmin(current_objectives[keep_one:,2]) + keep_one # folkliness
-                best = np.argmax(current_objectives[keep_one:,2]) + keep_one # folkliness
+                worst = np.argmin(scalarized[keep_one:]) + keep_one
+                best = np.argmax(scalarized[keep_one:]) + keep_one
                 replacements.append((best, worst))
 
                 if verbose:
-                    print("%d: %d [%d r, ~%f s, ~%f g, ~%f f] --> %d [%d rules, ~%f s, ~%f g, ~%f f] cf [%d rules, ~%f s, ~%f g, ~%f f]" % (
+                    print("%d: %d [%d r, ~%f s, ~%f g, ~%f f] %f --> %d [%d rules, ~%f s, ~%f g, ~%f f] %f cf [%d rules, ~%f s, ~%f g, ~%f f] %f" % (
                         batch_iter,
-                        worst, constructors[worst].num_rules, current_objectives[worst,0], current_objectives[worst,1], current_objectives[worst,2],
-                        best, constructors[best].num_rules, current_objectives[best,0], current_objectives[best,1], current_objectives[best,2],
-                        constructors[0].num_rules, current_objectives[0,0], current_objectives[0,1], current_objectives[0,2],
+                        worst, constructors[worst].num_rules, current_objectives[worst,0], current_objectives[worst,1], current_objectives[worst,2], scalarized[worst],
+                        best, constructors[best].num_rules, current_objectives[best,0], current_objectives[best,1], current_objectives[best,2], scalarized[best],
+                        constructors[0].num_rules, current_objectives[0,0], current_objectives[0,1], current_objectives[0,2], scalarized[0],
                     ))
 
                 constructors[worst] = constructors[best].copy()

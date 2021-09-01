@@ -45,16 +45,17 @@ if __name__ == "__main__":
     max_actions = 30
     color_neutral = False
 
-    num_problems = 32
+    num_problems = 1
     eval_period = 1000
-    correctness_bar = 1.0
+    correctness_bar = 2.0
 
     inc_sampler = "scrambled"
     eval_samplers = ["scrambled", "uniform"]
     assert inc_sampler in eval_samplers
 
     num_candidates = 1
-    max_select_iters = 10000
+    # max_select_iters = 10000
+    max_select_iters = 154
     ema_factor = .9
 
     breakpoint = -1
