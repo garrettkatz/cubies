@@ -65,8 +65,8 @@ if __name__ == "__main__":
     # break_seconds = 0
     verbose = True
 
-    do_cons = True
-    show_results = False
+    do_cons = False
+    show_results = True
     confirm = False
     confirm_show = False
 
@@ -194,6 +194,8 @@ if __name__ == "__main__":
             print(dump_name)
             with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f:
                 (rules, logs, choices, objectives, ema_objectives, replacements, batch_times) = pk.load(f)
+
+            # discontinuities in _objectives when a worst is replaced; don't plot fully connected
             scrambled_objectives, uniform_objectives = objectives
             ema_objectives = np.stack(ema_objectives)
     
@@ -206,6 +208,7 @@ if __name__ == "__main__":
                 correctness, godliness, folkliness = ema_objectives[:,:,0], ema_objectives[:,:,1], ema_objectives[:,:,2]
                 folkliness = np.array([(inc_added < i).sum() for i in range(0,num_incs, batch_size)])
                 
+                print("these are wrong, discontinuous objective lists")
                 pt.subplot(len(reps), 3, rep*3 + 1)
                 pt.plot(correctness)
                 pt.xlabel("batches")
@@ -218,6 +221,7 @@ if __name__ == "__main__":
                 pt.plot(folkliness)
                 pt.xlabel("batches")
                 pt.ylabel("folkliness")
+                pt.title("Should have disconnections")
 
         pt.show()
 
@@ -246,40 +250,40 @@ if __name__ == "__main__":
         pt.title("Red kept, to worst to best")
         pt.show()
 
-        reps = list(range(num_reps))
-        for rep in reps:
-            dump_name = "%s_r%d" % (dump_base, rep)
-            print(dump_name)
-            if not os.path.exists("%s/%s.pkl" % (dump_dir, dump_name)): break
-            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f:
-                (rules, logs, choices, objectives, ema_objectives, replacements, batch_times) = pk.load(f)
-            scrambled_objectives, uniform_objectives = objectives
-            ema_objectives = np.stack(ema_objectives)
+        # reps = list(range(num_reps))
+        # for rep in reps:
+        #     dump_name = "%s_r%d" % (dump_base, rep)
+        #     print(dump_name)
+        #     if not os.path.exists("%s/%s.pkl" % (dump_dir, dump_name)): break
+        #     with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f:
+        #         (rules, logs, choices, objectives, ema_objectives, replacements, batch_times) = pk.load(f)
+        #     scrambled_objectives, uniform_objectives = objectives
+        #     ema_objectives = np.stack(ema_objectives)
 
-            for c in range(num_candidates):
+        #     for c in range(num_candidates):
 
-                toggle_link_choices, macro_link_choices = choices[c]
-                _, godliness, folkliness = scrambled_objectives[c][-1]
+        #         toggle_link_choices, macro_link_choices = choices[c]
+        #         _, godliness, folkliness = scrambled_objectives[c][-1]
 
-                ts, lents = zip(*toggle_link_choices)
-                chain_portions = np.array(ts) / np.array(lents)
+        #         ts, lents = zip(*toggle_link_choices)
+        #         chain_portions = np.array(ts) / np.array(lents)
 
-                pt.subplot(1,3,1)
-                pt.scatter(ts, lents, color='k')
-                pt.xlabel("choice")
-                pt.ylabel("num choices")
+        #         pt.subplot(1,3,1)
+        #         pt.scatter(ts, lents, color='k')
+        #         pt.xlabel("choice")
+        #         pt.ylabel("num choices")
 
-                pt.subplot(1,3,2)
-                pt.scatter(chain_portions, [godliness] * len(chain_portions), color='k')
-                pt.xlabel("chain portion")
-                pt.ylabel("godliness")
+        #         pt.subplot(1,3,2)
+        #         pt.scatter(chain_portions, [godliness] * len(chain_portions), color='k')
+        #         pt.xlabel("chain portion")
+        #         pt.ylabel("godliness")
 
-                pt.subplot(1,3,3)
-                pt.scatter(chain_portions, [folkliness] * len(chain_portions), color='k')
-                pt.xlabel("chain portion")
-                pt.ylabel("folkliness")
+        #         pt.subplot(1,3,3)
+        #         pt.scatter(chain_portions, [folkliness] * len(chain_portions), color='k')
+        #         pt.xlabel("chain portion")
+        #         pt.ylabel("folkliness")
 
-        pt.show()
+        # pt.show()
 
 
 

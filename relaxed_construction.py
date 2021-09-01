@@ -63,8 +63,8 @@ class Constructor:
         constructor.macros = list(self.macros)
         constructor.chain_lengths = self.chain_lengths.copy()
 
-        constructor.num_rules =  self.num_rules
-        constructor.num_incs =  self.num_incs
+        constructor.num_rules = self.num_rules
+        constructor.num_incs = self.num_incs
 
         constructor.inc_added = self.inc_added.copy()
         constructor.inc_disabled = self.inc_disabled.copy()
@@ -234,8 +234,9 @@ class Constructor:
             num_solved += solved
             opt_bound = min(self.domain.god_number(), len(path))
             alg_moves = sum([len(a)+len(m) for _,a,m in plan])
-            godlinesses.append(0 if not solved else (opt_bound+1) / (alg_moves+1)) # flawed if path is suboptimal
-        
+            # godlinesses.append(0 if not solved else (opt_bound+1) / (alg_moves+1)) # flawed if path is suboptimal
+            godlinesses.append(0 if not solved else 1 / max(alg_moves,1)) # just try to take smaller step counts on average
+
         correctness = num_solved / len(probs)
         godliness = np.mean(godlinesses)
         folkliness = 1 - self.num_rules / self.max_rules
