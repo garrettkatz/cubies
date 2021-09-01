@@ -247,23 +247,35 @@ if __name__ == "__main__":
         for r in range(num_reps):
             pt.subplot(1, num_reps, r+1)
             
-            for b,(scrambled_objectives, uniform_objectives) in enumerate(objective_archive[r]):
-                if b == 2000: break
+            idx = np.random.choice(len(objective_archive[r]), size=2000)
+            # for b,(scrambled_objectives, uniform_objectives) in enumerate(objective_archive[r][-2000:]):
+                # if b == 2000: break
+            for b in idx:
+                scrambled_objectives, uniform_objectives = objective_archive[r][b]
                 print("%d,%d of %d" % (r,b, len(objective_archive[r])))
                 # correctness, godliness, folkliness = zip(*scrambled_objectives)
                 # pt.plot(folkliness, godliness, '-', color=(.5, .5, .5))
                 # pt.scatter(folkliness[-1], godliness[-1], color=(.5,)*3)
-                _, godliness, folkliness = scrambled_objectives[-1]
-                pt.plot(folkliness, godliness, '.', color=(.5,)*3)
+                _, godliness, folkliness = zip(*scrambled_objectives)
+                godliness = list(godliness)
+                for g in range(1,len(godliness)):
+                    godliness[g] = .99 * godliness[g-1] + (1 - .99) * godliness[g]
+                pt.plot(folkliness[-1], godliness[-1], '.', color=(.5,)*3)
+                # _, godliness, folkliness = scrambled_objectives[-1]
+                # pt.plot(folkliness, godliness, '.', color=(.5,)*3)
 
             if len(frontiers[r]) > 0:
                 rules, objectives, weights = zip(*frontiers[r])
                 for f,(scrambled_objectives, uniform_objectives) in enumerate(objectives):
                     print("%d,f %d of %d" % (r,f, len(objectives)))
-                    # correctness, godliness, folkliness = zip(*scrambled_objectives)
-                    # pt.plot(folkliness, godliness, '-k')
+                    correctness, godliness, folkliness = zip(*scrambled_objectives)
+                    godliness = list(godliness)
+                    for g in range(1,len(godliness)):
+                        godliness[g] = .99 * godliness[g-1] + (1 - .99) * godliness[g]
+                    pt.plot(folkliness[100:], godliness[100:], '-k')
+                    pt.plot(folkliness[-1], godliness[-1], 'ro')
                     # pt.scatter(folkliness[-1], godliness[-1], color=(0.,)*3)
-                    _, godliness, folkliness = scrambled_objectives[-1]
-                    pt.plot(folkliness, godliness, '.', color=(0.,)*3)
+                    # _, godliness, folkliness = scrambled_objectives[-1]
+                    # pt.plot(folkliness, godliness, '.', color=(0.,)*3)
             
         pt.show()
