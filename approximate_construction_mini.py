@@ -28,49 +28,61 @@ def uniform(rng, states, paths):
 if __name__ == "__main__":
 
     # config
-    cube_size, num_twist_axes, quarter_turns = 3, 3, True # full cube
-    # cube_size, num_twist_axes, quarter_turns = 2, 2, True # 29k states
-    # cube_size, num_twist_axes, quarter_turns = 2, 3, False # 24 states
 
-    tree_depth = 1
+    # # pocket cube: one axis with quarter twists, one with half twists
+    # # 120 states, max depth 11
+    # cube_size = 2
+    # valid_actions = (
+    #     (0,1,1), (0,1,2), (0,1,3),
+    #     (1,1,2), 
+    # )
+    # cube_str = "s120"
+    # tree_depth = 11
+
+    # pocket cube: one axis with quarter twists, two with half twists
+    # 5040 states, reached in max_depth=13
+    cube_size = 2
+    valid_actions = (
+        (0,1,1), (0,1,2), (0,1,3),
+        (1,1,2),
+        (2,1,2),
+    )
+    cube_str = "s5040"
+    tree_depth = 13
+
     use_safe_depth = False
     max_depth = 1
     max_actions = 30
-    color_neutral = True
+    color_neutral = False
 
     # static_incs_for_stop = 256
-    num_problems = 1024
-    eval_period = 1000
-    correctness_bar = 0.99
-    inc_sampler = "scrambled"
-    # eval_samplers = ["scrambled", "uniform"]
-    eval_samplers = ["scrambled"]
+    num_problems = 32
+    eval_period = 100
+    correctness_bar = 1.1
+    inc_sampler = "uniform"
+    eval_samplers = ["scrambled", "uniform"]
+    # eval_samplers = ["scrambled"]
     assert inc_sampler in eval_samplers
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 16
-    break_seconds = 10 * 60
+    num_reps = 30
+    break_seconds = 5 * 60
     verbose = True
 
-    do_cons = False
-    show_results = True
+    do_cons = True
+    show_results = False
     confirm = False
     confirm_show = False
 
     # set up descriptive dump name
-    dump_period = 1000
+    dump_period = 100
     dump_dir = "acons"
-    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s_cb%s" % (
-        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, inc_sampler, correctness_bar)
-    # dump_base = "N%da%dq%d_D%d_M%d_cn%d" % (
-    #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral)
-    # dump_base = "N%da%dq%d_D%d_M%d_cn%d_T%d" % (
-    #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, static_incs_for_stop)
+    dump_base = "N%d%s_D%d_M%d_cn%d_%s_cb%s" % (
+        cube_size, cube_str, tree_depth, max_depth, color_neutral, inc_sampler, correctness_bar)
 
     import itertools as it
     from cube import CubeDomain
-    valid_actions = tuple(it.product(range(num_twist_axes), range(1,cube_size), range(2-quarter_turns, 4, 2-quarter_turns)))
     domain = CubeDomain(cube_size, valid_actions)
     init = domain.solved_state()
 
@@ -78,13 +90,9 @@ if __name__ == "__main__":
     tree = SearchTree(domain, tree_depth)
     assert tree.depth() == tree_depth
     
-    # all_states = tree.states_rooted_at(init)
-    # optimal_paths = tuple(map(tuple, map(domain.reverse, tree.paths()))) # from state to solved
-    # max_rules = len(all_states)
-
-    all_states = []
-    optimal_paths = []
-    max_rules = 100_000
+    all_states = tree.states_rooted_at(init)
+    optimal_paths = tuple(map(tuple, map(domain.reverse, tree.paths()))) # from state to solved
+    max_rules = len(all_states)
 
     max_scramble_length = max_actions - max_depth
 
@@ -106,24 +114,15 @@ if __name__ == "__main__":
             
             scrambled_objectives = []
             uniform_objectives = []
+            exhaust_objectives = []
+            static_incs = [0]
 
-            static_incs = 0
-            max_static_incs = 0
             for k in it.count():
                 if constructor.num_rules in [max_rules, breakpoint]: break
-                # if static_incs == static_incs_for_stop: break
-
-                # max_scramble_length = max_actions - max_depth
-                # # probs = softmax(np.arange(max_scramble_length+1))
-                # probs = np.arange(max_scramble_length+1, dtype=float)
-                # probs /= probs.sum()
-                # scramble_length = rng.choice(max_scramble_length + 1, p=probs)
-                # scramble = list(map(tuple, rng.choice(domain.valid_actions(), size=scramble_length)))
-                # state = domain.execute(scramble, domain.solved_state())
-                # path = domain.reverse(scramble)
 
                 if inc_sampler == "scrambled": state, path = scrambled_sample()
                 if inc_sampler == "uniform": state, path = uniform_sample()
+                # state, path = all_states[k % len(all_states)], optimal_paths[k % len(all_states)]
 
                 state_bytes = state.tobytes()
                 if state_bytes not in inc_states: inc_states[state_bytes] = []
@@ -131,10 +130,9 @@ if __name__ == "__main__":
 
                 augmented = constructor.incorporate(state, path)
                 if augmented:
-                    static_incs = 0
+                    static_incs.append(0)
                 else:
-                    static_incs += 1
-                    max_static_incs = max(max_static_incs, static_incs)
+                    static_incs.append(static_incs[-1] + 1)
 
                 if k % eval_period == 0:
 
@@ -146,29 +144,41 @@ if __name__ == "__main__":
                         probs = [uniform_sample() for _ in range(num_problems)]
                         uniform_objectives.append(constructor.evaluate(probs))
 
+                    probs = list(zip(all_states, optimal_paths))
+                    exhaust_objectives.append(constructor.evaluate(probs))
+
                     if inc_sampler == "scrambled": correctness, godliness, _ = scrambled_objectives[-1]
                     if inc_sampler == "uniform": correctness, godliness, _ = uniform_objectives[-1]
+                    true_correctness, _, _ = exhaust_objectives[-1]
 
                     if verbose:
                         wildcards = constructor.rules()[1]
-                        print("%d,%d: %d <= %d rules (%d states), %f solved, %f godly, %f wildcard, static for %d" % (
+                        print("%d,%d: %d <= %d rules (%d states), %f(%f) solved, %f godly, %f wildcard, static for %d" % (
                             rep, k, constructor.num_rules, max_rules, len(all_states),
-                            correctness, godliness,
-                            wildcards.sum() / wildcards.size, static_incs))
+                            correctness, true_correctness, godliness,
+                            wildcards.sum() / wildcards.size, static_incs[-1]))
 
                     if correctness >= correctness_bar: break
+                    
+                    if true_correctness == 1.0: break
 
                 if k % dump_period == 0:
                     dump_name = "%s_r%d" % (dump_base, rep)
                     with open(dump_name + ".pkl", "wb") as f:
-                        pk.dump((constructor.rules(), constructor.logs(), (scrambled_objectives, uniform_objectives), inc_states), f)
+                        pk.dump((
+                            constructor.rules(), constructor.logs(),
+                            (scrambled_objectives, uniform_objectives, exhaust_objectives),
+                            static_incs, inc_states), f)
         
             if verbose: print("(max_depth = %d)" % max_depth)
     
             dump_name = "%s_r%d" % (dump_base, rep)
             print(dump_name)
             with open(dump_name + ".pkl", "wb") as f:
-                pk.dump((constructor.rules(), constructor.logs(), (scrambled_objectives, uniform_objectives), inc_states), f)
+                pk.dump((
+                    constructor.rules(), constructor.logs(),
+                    (scrambled_objectives, uniform_objectives, exhaust_objectives),
+                    static_incs, inc_states), f)
             os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
     
             # patterns, wildcards, macros = constructor.rules()
@@ -185,21 +195,30 @@ if __name__ == "__main__":
             dump_name = "%s_r%d" % (dump_base, rep)
             print(dump_name)
             if not os.path.exists("%s/%s.pkl" % (dump_dir, dump_name)): break
-            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, inc_states) = pk.load(f)
+            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
             num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
 
+            pt.plot(static_incs)
+            pt.xlabel("incs")
+            pt.xlabel("incs since augment")
+            pt.show()
+
+            true_correct = list(zip(*objectives[2]))[0]
+
             incs = np.arange(0, num_incs, eval_period)
-            for n, (name, objective) in enumerate(zip(["scrambled","uniform"], objectives)):
+            for n, (name, objective) in enumerate(zip(["scrambled","uniform"], objectives[:2])):
                 if len(objective) == 0: break
                 correctness, godliness, folkliness = zip(*objective)
                 correctness = list(correctness)
                 godliness = list(godliness)
                 for i in range(1,len(correctness)):
-                    correctness[i] = .9*correctness[i-1] + .1 * correctness[i]
+                    # correctness[i] = .9*correctness[i-1] + .1 * correctness[i]
                     godliness[i] = .9*godliness[i-1] + .1 * godliness[i]
                 pt.subplot(2,3,n*3 + 1)
-                pt.plot(incs, correctness)
+                pt.plot(incs, correctness, label="sampled")
+                pt.plot(incs, true_correct, label="true")
                 pt.ylabel("correctness")
+                pt.legend()
                 pt.title(name)
                 pt.xlabel("incs")
                 pt.subplot(2,3,n*3 + 2)

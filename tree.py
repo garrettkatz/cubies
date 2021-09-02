@@ -86,11 +86,28 @@ class SearchTree:
 if __name__ == "__main__":
 
     import itertools as it
-    cube_size, num_twist_axes, quarter_turns = 2, 3, True # maxdep 11, 3.6M states
-    # cube_size, num_twist_axes, quarter_turns = 2, 3, False # maxdep 3, 24 states
-    # cube_size, num_twist_axes, quarter_turns = 2, 2, True # maxdep 13, 29160 states
-    # cube_size, num_twist_axes, quarter_turns = 2, 2, False # maxdep 2, 6 states
-    valid_actions = tuple(it.product(range(num_twist_axes), range(1,cube_size), range(2-quarter_turns, 4, 2-quarter_turns)))
+    # cube_size, num_twist_axes, quarter_turns = 2, 3, True # maxdep 11, 3.6M states
+    # # cube_size, num_twist_axes, quarter_turns = 2, 3, False # maxdep 3, 24 states
+    # # cube_size, num_twist_axes, quarter_turns = 2, 2, True # maxdep 13, 29160 states
+    # # cube_size, num_twist_axes, quarter_turns = 2, 2, False # maxdep 2, 6 states
+    # valid_actions = tuple(it.product(range(num_twist_axes), range(1,cube_size), range(2-quarter_turns, 4, 2-quarter_turns)))
+
+    # pocket cube: one axis with quarter twists, one with half twists
+    # 120 states, reached in max_depth=10
+    cube_size = 2
+    valid_actions = (
+        (0,1,1), (0,1,2), (0,1,3),
+        (1,1,2), 
+    )
+
+    # # pocket cube: one axis with quarter twists, two with half twists
+    # # 5040 states, reached in max_depth=13
+    # cube_size = 2
+    # valid_actions = (
+    #     (0,1,1), (0,1,2), (0,1,3),
+    #     (1,1,2),
+    #     (2,1,2),
+    # )
 
     from cube import CubeDomain
     domain = CubeDomain(cube_size, valid_actions)
@@ -99,9 +116,10 @@ if __name__ == "__main__":
     # tree = SearchTree(domain, max_depth=2)
     # print(tree.layers)
 
-    tree = SearchTree(domain, max_depth=15) # 5 uses up 4+ GB memory for 3cube
+    tree = SearchTree(domain, max_depth=10) # 5 uses up 4+ GB memory for 3cube
+    print("depth, total nodes, nodes at depth, A**depth")
     for depth in range(len(tree._count)-1):
-        print(depth, tree._count[depth+1], tree._count[depth+1] - tree._count[depth], A**(depth+1))
+        print(depth+1, tree._count[depth+1], tree._count[depth+1] - tree._count[depth], A**(depth+1))
 
     # #### profile different tree iteration methods
     # # slow
