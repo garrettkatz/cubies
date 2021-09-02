@@ -28,32 +28,34 @@ def uniform(rng, states, paths):
 if __name__ == "__main__":
 
     # config
-    cube_size, num_twist_axes, quarter_turns = 2, 2, True # 29k states
+    cube_size, num_twist_axes, quarter_turns = 3, 3, True # full cube
+    # cube_size, num_twist_axes, quarter_turns = 2, 2, True # 29k states
     # cube_size, num_twist_axes, quarter_turns = 2, 3, False # 24 states
 
-    tree_depth = 14
+    tree_depth = 1
     use_safe_depth = False
     max_depth = 1
     max_actions = 30
-    color_neutral = False
+    color_neutral = True
 
-    static_incs_for_stop = 256
-    num_problems = 32
+    # static_incs_for_stop = 256
+    num_problems = 1024
     eval_period = 1000
-    correctness_bar = 0.9
+    correctness_bar = 0.99
     inc_sampler = "scrambled"
-    eval_samplers = ["scrambled", "uniform"]
+    # eval_samplers = ["scrambled", "uniform"]
+    eval_samplers = ["scrambled"]
     assert inc_sampler in eval_samplers
 
     breakpoint = -1
     # breakpoint = 100
     num_reps = 16
-    break_seconds = 1 * 60
+    break_seconds = 10 * 60
     verbose = True
 
     do_cons = True
     show_results = False
-    confirm = True
+    confirm = False
     confirm_show = False
 
     # set up descriptive dump name
@@ -76,12 +78,15 @@ if __name__ == "__main__":
     tree = SearchTree(domain, tree_depth)
     assert tree.depth() == tree_depth
     
-    all_states = tree.states_rooted_at(init)
-    optimal_paths = tuple(map(tuple, map(domain.reverse, tree.paths()))) # from state to solved
+    # all_states = tree.states_rooted_at(init)
+    # optimal_paths = tuple(map(tuple, map(domain.reverse, tree.paths()))) # from state to solved
+    # max_rules = len(all_states)
+
+    all_states = []
+    optimal_paths = []
+    max_rules = 100_000
 
     max_scramble_length = max_actions - max_depth
-
-    max_rules = len(all_states)
 
     import pickle as pk
     import os
