@@ -28,27 +28,31 @@ def uniform(rng, states, paths):
 if __name__ == "__main__":
 
     # config
+    do_cons = False
+    show_results = True
+    confirm = False
+    confirm_show = False
 
-    # # pocket cube: one axis with quarter twists, one with half twists
-    # # 120 states, max depth 11
-    # cube_size = 2
-    # valid_actions = (
-    #     (0,1,1), (0,1,2), (0,1,3),
-    #     (1,1,2), 
-    # )
-    # cube_str = "s120"
-    # tree_depth = 11
-
-    # pocket cube: one axis with quarter twists, two with half twists
-    # 5040 states, reached in max_depth=13
+    # pocket cube: one axis with quarter twists, one with half twists
+    # 120 states, max depth 11
     cube_size = 2
     valid_actions = (
         (0,1,1), (0,1,2), (0,1,3),
-        (1,1,2),
-        (2,1,2),
+        (1,1,2), 
     )
-    cube_str = "s5040"
-    tree_depth = 13
+    cube_str = "s120"
+    tree_depth = 11
+
+    # # pocket cube: one axis with quarter twists, two with half twists
+    # # 5040 states, reached in max_depth=13
+    # cube_size = 2
+    # valid_actions = (
+    #     (0,1,1), (0,1,2), (0,1,3),
+    #     (1,1,2),
+    #     (2,1,2),
+    # )
+    # cube_str = "s5040"
+    # tree_depth = 13
 
     use_safe_depth = False
     max_depth = 1
@@ -57,23 +61,19 @@ if __name__ == "__main__":
 
     # static_incs_for_stop = 256
     num_problems = 32
-    eval_period = 100
+    eval_period = 1
     correctness_bar = 1.1
-    inc_sampler = "uniform"
+    gamma = .99
+    inc_sampler = "scrambled"
     eval_samplers = ["scrambled", "uniform"]
     # eval_samplers = ["scrambled"]
     assert inc_sampler in eval_samplers
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 30
-    break_seconds = 5 * 60
+    num_reps = 1
+    break_seconds = 0 * 60
     verbose = True
-
-    do_cons = True
-    show_results = False
-    confirm = False
-    confirm_show = False
 
     # set up descriptive dump name
     dump_period = 100
@@ -115,6 +115,7 @@ if __name__ == "__main__":
             scrambled_objectives = []
             uniform_objectives = []
             exhaust_objectives = []
+            inc_objectives = []
             static_incs = [0]
 
             for k in it.count():
@@ -127,6 +128,10 @@ if __name__ == "__main__":
                 state_bytes = state.tobytes()
                 if state_bytes not in inc_states: inc_states[state_bytes] = []
                 inc_states[state_bytes].append(k)
+
+                probs = [(state, path)]
+                correctness, godliness, folkliness = constructor.evaluate(probs)
+                inc_objectives.append((correctness, godliness, folkliness))
 
                 augmented = constructor.incorporate(state, path)
                 if augmented:
@@ -144,7 +149,9 @@ if __name__ == "__main__":
                         probs = [uniform_sample() for _ in range(num_problems)]
                         uniform_objectives.append(constructor.evaluate(probs))
 
-                    probs = list(zip(all_states, optimal_paths))
+                    if inc_sampler == "scrambled": probs = [scrambled_sample() for _ in range(len(all_states))]
+                    if inc_sampler == "uniform": probs = list(zip(all_states, optimal_paths))
+                    # probs = list(zip(all_states, optimal_paths))
                     exhaust_objectives.append(constructor.evaluate(probs))
 
                     if inc_sampler == "scrambled": correctness, godliness, _ = scrambled_objectives[-1]
@@ -167,7 +174,7 @@ if __name__ == "__main__":
                     with open(dump_name + ".pkl", "wb") as f:
                         pk.dump((
                             constructor.rules(), constructor.logs(),
-                            (scrambled_objectives, uniform_objectives, exhaust_objectives),
+                            (scrambled_objectives, uniform_objectives, exhaust_objectives, inc_objectives),
                             static_incs, inc_states), f)
         
             if verbose: print("(max_depth = %d)" % max_depth)
@@ -177,7 +184,7 @@ if __name__ == "__main__":
             with open(dump_name + ".pkl", "wb") as f:
                 pk.dump((
                     constructor.rules(), constructor.logs(),
-                    (scrambled_objectives, uniform_objectives, exhaust_objectives),
+                    (scrambled_objectives, uniform_objectives, exhaust_objectives, inc_objectives),
                     static_incs, inc_states), f)
             os.system("mv %s.pkl %s/%s.pkl" % (dump_name, dump_dir, dump_name))
     
@@ -191,58 +198,15 @@ if __name__ == "__main__":
 
     if show_results:
 
-        for rep in range(num_reps):
-            dump_name = "%s_r%d" % (dump_base, rep)
-            print(dump_name)
-            if not os.path.exists("%s/%s.pkl" % (dump_dir, dump_name)): break
-            with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
-            num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
-
-            pt.plot(static_incs)
-            pt.xlabel("incs")
-            pt.xlabel("incs since augment")
-            pt.show()
-
-            true_correct = list(zip(*objectives[2]))[0]
-
-            incs = np.arange(0, num_incs, eval_period)
-            for n, (name, objective) in enumerate(zip(["scrambled","uniform"], objectives[:2])):
-                if len(objective) == 0: break
-                correctness, godliness, folkliness = zip(*objective)
-                correctness = list(correctness)
-                godliness = list(godliness)
-                for i in range(1,len(correctness)):
-                    # correctness[i] = .9*correctness[i-1] + .1 * correctness[i]
-                    godliness[i] = .9*godliness[i-1] + .1 * godliness[i]
-                pt.subplot(2,3,n*3 + 1)
-                pt.plot(incs, correctness, label="sampled")
-                pt.plot(incs, true_correct, label="true")
-                pt.ylabel("correctness")
-                pt.legend()
-                pt.title(name)
-                pt.xlabel("incs")
-                pt.subplot(2,3,n*3 + 2)
-                pt.plot(incs, godliness)
-                pt.ylabel("godliness")
-                pt.title(name)
-                pt.xlabel("incs")
-                pt.subplot(2,3,n*3 + 3)
-                pt.plot(incs, folkliness)
-                pt.ylabel("folkliness")
-                pt.title(name)
-                pt.xlabel("incs")
-        pt.show()
-
         # rep = 0
         # dump_name = "%s_r%d" % (dump_base, rep)
-        # print(dump_name)
+        # # with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
         # with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, inc_states) = pk.load(f)
         # patterns, wildcards, macros = rules
-        # num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
 
         # ### show pdb
-        # numrows = min(14, len(macros))
-        # numcols = min(15, max(map(len, macros)) + 2)
+        # numrows = min(3, len(macros))
+        # numcols = min(4, max(map(len, macros)) + 2)
         # for r in range(numrows):
         #     rule = r if r < numrows/2 else len(patterns)-(numrows-r)
         #     ax = domain.render_subplot(numrows, numcols, r*numcols + 1, patterns[rule])
@@ -256,7 +220,110 @@ if __name__ == "__main__":
         #         state = domain.perform(macros[rule][m], state)
         #         ax = domain.render_subplot(numrows, numcols, r*numcols + 2 + m+1, state)
         #         ax.set_title(str(macros[rule][m]))
-        # pt.tight_layout()
+        # # pt.tight_layout()
+        # pt.show()
+
+        # show one cons run
+        rep = 0
+        dump_name = "%s_r%d" % (dump_base, rep)
+        print(dump_name)
+        with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
+        num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
+
+        if inc_sampler == "scrambled":
+            sampled_correct, sampled_godliness, folkliness = list(zip(*objectives[0]))
+        if inc_sampler == "uniform":
+            sampled_correct, sampled_godliness, folkliness = list(zip(*objectives[1]))
+        true_correct, true_godliness, _ = list(zip(*objectives[2]))
+        inc_correct, inc_godliness, _ = list(zip(*objectives[3]))
+        inc_correct, inc_godliness = map(list, (inc_correct, inc_godliness))
+        
+        # EMA
+        # inc_correct[0] = 0
+        # inc_godliness[0] = 0
+        for k in range(1, len(inc_correct)):
+            inc_correct[k] = gamma * inc_correct[k-1] + (1 - gamma) * inc_correct[k]
+            inc_godliness[k] = gamma * inc_godliness[k-1] + (1 - gamma) * inc_godliness[k]
+            # if static_incs[k] > 0:
+            #     inc_correct[k] = gamma * inc_correct[k-1] + (1 - gamma) * inc_correct[k]
+            #     inc_godliness[k] = gamma * inc_godliness[k-1] + (1 - gamma) * inc_godliness[k]
+            # else:
+            #     inc_correct[k] = 0
+            #     inc_godliness[k] = 0
+            #     pass
+        # # online mean since last augmentation
+        # for k in range(1, len(inc_correct)):
+        #     if static_incs[k] > 0:
+        #         inc_correct[k] = inc_correct[k-1] + (inc_correct[k] - inc_correct[k-1]) / (static_incs[k] + 1)
+        #         inc_godliness[k] = inc_godliness[k-1] + (inc_godliness[k] - inc_godliness[k-1]) / (static_incs[k] + 1)
+        #     else:
+        #         inc_correct[k] = 0
+        #         inc_godliness[k] = 0
+        #         pass
+                
+
+        pt.subplot(4,1,1)
+        pt.plot(static_incs, 'k-')
+        pt.ylabel("Consecutive static")
+        pt.subplot(4,1,2)
+        pt.plot(folkliness, 'k-')
+        pt.ylabel("Folkliness")
+        pt.subplot(4,1,3)
+        # pt.plot(sampled_correct, '-', color=(.75,)*3, label="Sample")
+        pt.plot(inc_correct, '-', color=(.75,)*3, label="Online")
+        pt.plot(true_correct, '-', color=(0,)*3, label="Population")
+        pt.legend()
+        pt.ylabel("Correctness")
+        pt.subplot(4,1,4)
+        # pt.plot(sampled_godliness, '-', color=(.75,)*3, label="Sample")
+        pt.plot(inc_godliness, '-', color=(.75,)*3, label="Online")
+        pt.plot(true_godliness, '-', color=(0,)*3, label="Population")
+        pt.legend()
+        pt.ylabel("Godliness")
+        pt.xlabel("Incs")
+        pt.show()
+
+        # # for rep in range(num_reps):
+        # for rep in range(3):
+        #     dump_name = "%s_r%d" % (dump_base, rep)
+        #     print(dump_name)
+        #     if not os.path.exists("%s/%s.pkl" % (dump_dir, dump_name)): break
+        #     with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
+        #     num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
+
+        #     pt.plot(static_incs)
+        #     pt.xlabel("incs")
+        #     pt.xlabel("incs since augment")
+        #     pt.show()
+
+        #     true_correct = list(zip(*objectives[2]))[0]
+
+        #     incs = np.arange(0, num_incs, eval_period)
+        #     for n, (name, objective) in enumerate(zip(["scrambled","uniform"], objectives[:2])):
+        #         if len(objective) == 0: break
+        #         correctness, godliness, folkliness = zip(*objective)
+        #         correctness = list(correctness)
+        #         godliness = list(godliness)
+        #         for i in range(1,len(correctness)):
+        #             # correctness[i] = .9*correctness[i-1] + .1 * correctness[i]
+        #             godliness[i] = .9*godliness[i-1] + .1 * godliness[i]
+        #         pt.subplot(2,3,n*3 + 1)
+        #         pt.plot(incs, correctness, label="sampled")
+        #         pt.plot(incs, true_correct, label="true")
+        #         pt.ylabel("correctness")
+        #         pt.legend()
+        #         pt.title(name)
+        #         pt.xlabel("incs")
+        #         pt.subplot(2,3,n*3 + 2)
+        #         pt.plot(incs, godliness)
+        #         pt.ylabel("godliness")
+        #         pt.title(name)
+        #         pt.xlabel("incs")
+        #         pt.subplot(2,3,n*3 + 3)
+        #         pt.plot(incs, folkliness)
+        #         pt.ylabel("folkliness")
+        #         pt.title(name)
+        #         pt.xlabel("incs")
         # pt.show()
 
         # wildcards_disabled = np.zeros(num_incs, dtype=int)
