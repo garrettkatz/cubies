@@ -64,26 +64,26 @@ if __name__ == "__main__":
     confirm = False
     confirm_show = False
 
-    # # pocket cube: one axis with quarter twists, one with half twists
-    # # 120 states, max depth 11
-    # cube_size = 2
-    # valid_actions = (
-    #     (0,1,1), (0,1,2), (0,1,3),
-    #     (1,1,2), 
-    # )
-    # cube_str = "s120"
-    # tree_depth = 11
-
-    # pocket cube: one axis with quarter twists, two with half twists
-    # 5040 states, reached in max_depth=13
+    # pocket cube: one axis with quarter twists, one with half twists
+    # 120 states, max depth 11
     cube_size = 2
     valid_actions = (
         (0,1,1), (0,1,2), (0,1,3),
-        (1,1,2),
-        (2,1,2),
+        (1,1,2), 
     )
-    cube_str = "s5040"
-    tree_depth = 13
+    cube_str = "s120"
+    tree_depth = 11
+
+    # # pocket cube: one axis with quarter twists, two with half twists
+    # # 5040 states, reached in max_depth=13
+    # cube_size = 2
+    # valid_actions = (
+    #     (0,1,1), (0,1,2), (0,1,3),
+    #     (1,1,2),
+    #     (2,1,2),
+    # )
+    # cube_str = "s5040"
+    # tree_depth = 13
 
     use_safe_depth = False
     max_depth = 1
@@ -96,7 +96,7 @@ if __name__ == "__main__":
     gamma = .99
     correctness_bar = 1.0
 
-    inc_sampler = "scrambled"
+    inc_sampler = "uniform"
     eval_samplers = ["scrambled", "uniform"]
     assert inc_sampler in eval_samplers
 
@@ -106,7 +106,7 @@ if __name__ == "__main__":
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 30
+    num_reps = 1
     break_seconds = 0 * 60
     verbose = True
 
@@ -165,9 +165,9 @@ if __name__ == "__main__":
             ema_scalarized = [[] for _ in range(num_candidates)]
 
             # # initial scalarization weights in S+
-            weights = rng.normal(size=2) # random
+            # weights = rng.normal(size=2) # random
             # weights = np.array([0.01, .99]) # folksy
-            # weights = np.array([.99, .01]) # godly
+            weights = np.array([.99, .01]) # godly
             # weights = np.array([.5, .5]) # equally important
             weights = np.fabs(weights)
             weights /= np.sqrt(np.sum(weights**2))

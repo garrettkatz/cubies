@@ -12,7 +12,7 @@ def rewind(patterns, macros, inc_added, inc_disabled, inc):
 
 class Constructor:
 
-    def __init__(self, max_rules, rng, domain, tree, max_depth, max_actions, use_safe_depth, color_neutral):
+    def __init__(self, max_rules, rng, domain, tree, max_depth, max_actions, use_safe_depth, color_neutral, track_choices=False):
         self.max_rules = max_rules
         self.domain = domain
         self.rng = rng
@@ -40,8 +40,10 @@ class Constructor:
         self.inc_disabled = np.ones(self.wildcards.shape, dtype=int) * np.iinfo(int).max
         self.inc_added[0] = 0
         self.inc_disabled[0] = 0
+        self.augment_incs = [0]
 
         # logging for heuristics
+        self.track_choices = track_choices
         self.toggle_link_choices = []
         self.macro_link_choices = []
 
@@ -68,10 +70,24 @@ class Constructor:
 
         constructor.inc_added = self.inc_added.copy()
         constructor.inc_disabled = self.inc_disabled.copy()
+        constructor.augment_incs = list(self.augment_incs)
 
-        constructor.toggle_link_choices = list(self.toggle_link_choices)
-        constructor.macro_link_choices = list(self.macro_link_choices)
+        # constructor.toggle_link_choices = list(self.toggle_link_choices)
+        # constructor.macro_link_choices = list(self.macro_link_choices)
 
+        return constructor
+
+    def rewind_copy(self, inc):
+        constructor = self.copy()
+        constructor.num_rules = np.flatnonzero(self.inc_added <= inc).max() + 1
+        constructor.num_incs = inc
+        constructor.inc_added[constructor.num_rules:] = np.iinfo(int).max        
+        constructor.wildcards = constructor.inc_disabled > inc
+        constructor.inc_disabled[constructor.wildcards] = np.iinfo(int).max
+        for k, ai in enumerate(constructor.augment_incs):
+            if ai > inc:
+                constructor.augment_incs = constructor.augment_incs[:k]
+                break
         return constructor
 
     def toggle_wildcard(self, triggered, state, path):
@@ -111,7 +127,7 @@ class Constructor:
                 t = self.rng.choice(links_with_wildcards)
                 rule = rules[t]
 
-                self.toggle_link_choices.append((t, len(links_with_wildcards)))
+                if self.track_choices: self.toggle_link_choices.append((t, len(links_with_wildcards)))
 
                 w = self.rng.choice(np.flatnonzero(triggerers[t] != patterns[rule]))
                 wildcards[rule, w] = False
@@ -178,7 +194,7 @@ class Constructor:
         new_macro = path[:new_macro_lengths[k]]
         new_chain_length = new_macro_lengths[k] + self.chain_lengths[rule_indices[k]]
 
-        self.macro_link_choices.append((k, len(new_macro_lengths), len(new_macro), new_chain_length))
+        if self.track_choices: self.macro_link_choices.append((k, len(new_macro_lengths), len(new_macro), new_chain_length))
 
         pattern = state
 
@@ -217,11 +233,16 @@ class Constructor:
     #     self.num_rules += 1
 
     def incorporate(self, state, path):
+
         toggled = self.restrict_rules(state, path)
         has_trigger = self.has_neighboring_trigger(state, path)
         if not has_trigger: self.create_new_rule(state, path)
+
+        augmented = toggled or not has_trigger
+        if augmented: self.augment_incs.append(self.num_incs)
         self.num_incs += 1
-        return toggled or not has_trigger
+
+        return augmented
 
     def evaluate(self, probs):
         patterns, wildcards, macros = self.rules()
