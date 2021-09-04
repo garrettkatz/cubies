@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     # config
     do_cons = True
-    show_results = True
+    show_results = False
     confirm = False
     confirm_show = False
 
@@ -88,7 +88,7 @@ if __name__ == "__main__":
     max_incs = 50000
     inc_sampler = "uniform"
 
-    num_reps = 10
+    num_reps = 100
     break_seconds = 0 * 60
     verbose = True
 
@@ -187,61 +187,64 @@ if __name__ == "__main__":
             dump_name = "%s_r%d" % (dump_base, rep)
             with open(dump_name + ".pkl", "wb") as f:
                 pk.dump((trail.constructor.rules(), trail.constructor.logs(), weights, leaves), f)
+            os.system("mv %s_r%d.pkl %s/" % (dump_base, rep, dump_dir))
 
     if show_results:
 
-        # rep = 0
-        # dump_name = "%s_r%d" % (dump_base, rep)
-        # with open(dump_name + ".pkl", "rb") as f:
-        #     (rules, logs, weights, leaves) = pk.load(f)
-        # print("weights:", *weights)
+        rep = 0
+        dump_name = "%s_r%d" % (dump_base, rep)
+        dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
+        with open(dump_path, "rb") as f:
+            (rules, logs, weights, leaves) = pk.load(f)
+        print("weights:", *weights)
 
-        # evals, parent_index, fork_inc, num_incs = zip(*leaves)
-        # sample_scalarized, exhaust_scalarized, _, _ = zip(*evals)
+        evals, parent_index, fork_inc, num_incs = zip(*leaves)
+        sample_scalarized, exhaust_scalarized, _, _ = zip(*evals)
 
-        # for sp, name in enumerate(["Sample", "Population"]):
-        #     pt.subplot(1,3,sp+1)
-        #     pt.title(name)
+        for sp, name in enumerate(["Sample", "Population"]):
+            pt.subplot(1,3,sp+1)
+            pt.title(name)
 
-        #     scalarized = [sample_scalarized, exhaust_scalarized][sp]
-        #     for n in range(len(leaves)):
-        #         i = parent_index[n]
-        #         while fork_inc[n] < fork_inc[i]: i = parent_index[i]
-        #         pt.plot(
-        #             [fork_inc[i], fork_inc[i], num_incs[n]],
-        #             [scalarized[i], scalarized[n], scalarized[n]],
-        #             '-', color=(1 - n / len(leaves),)*3)
+            scalarized = [sample_scalarized, exhaust_scalarized][sp]
+            for n in range(len(leaves)):
+                i = parent_index[n]
+                while fork_inc[n] < fork_inc[i]: i = parent_index[i]
+                pt.plot(
+                    [fork_inc[i], fork_inc[i], num_incs[n]],
+                    [scalarized[i], scalarized[n], scalarized[n]],
+                    '-', color=(1 - n / len(leaves),)*3)
 
 
-        #     n = np.argmax(scalarized)
-        #     inc = num_incs[n]
-        #     while True:
-        #         i = parent_index[n]
-        #         while fork_inc[n] < fork_inc[i]: i = parent_index[i]
-        #         pt.plot(
-        #             [fork_inc[i], fork_inc[i], inc],
-        #             [scalarized[i], scalarized[n], scalarized[n]],
-        #             '-', color=(.0,)*3)
-        #         if n == 0: break
-        #         n = i
-        #         inc = fork_inc[i]
+            n = np.argmax(scalarized)
+            inc = num_incs[n]
+            while True:
+                i = parent_index[n]
+                while fork_inc[n] < fork_inc[i]: i = parent_index[i]
+                pt.plot(
+                    [fork_inc[i], fork_inc[i], inc],
+                    [scalarized[i], scalarized[n], scalarized[n]],
+                    '-', color=(.0,)*3)
+                if n == 0: break
+                n = i
+                inc = fork_inc[i]
 
-        #     pt.xlabel("incs")
-        #     pt.ylabel("scalarized")
+            pt.xlabel("incs")
+            pt.ylabel("scalarized")
 
-        # pt.subplot(1,3,3)
-        # sampled = [leaf[0][0] for leaf in leaves]
-        # exhaust = [leaf[0][1] for leaf in leaves]
-        # pt.scatter(sampled, exhaust, color='k')
-        # pt.xlabel("Sample")
-        # pt.ylabel("Population")
-        # pt.title("Scalarization")
+        pt.subplot(1,3,3)
+        sampled = [leaf[0][0] for leaf in leaves]
+        exhaust = [leaf[0][1] for leaf in leaves]
+        pt.scatter(sampled, exhaust, color='k')
+        pt.xlabel("Sample")
+        pt.ylabel("Population")
+        pt.title("Scalarization")
 
-        # pt.show()        
+        pt.show()        
 
         for rep in range(num_reps):
             dump_name = "%s_r%d" % (dump_base, rep)
-            with open(dump_name + ".pkl", "rb") as f:
+            dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
+            with open(dump_path, "rb") as f:
                 (rules, logs, weights, leaves) = pk.load(f)
             print("weights:", *weights)
     
