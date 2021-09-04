@@ -64,26 +64,26 @@ if __name__ == "__main__":
     confirm = False
     confirm_show = False
 
-    # pocket cube: one axis with quarter twists, one with half twists
-    # 120 states, max depth 11
-    cube_size = 2
-    valid_actions = (
-        (0,1,1), (0,1,2), (0,1,3),
-        (1,1,2), 
-    )
-    cube_str = "s120"
-    tree_depth = 11
-
-    # # pocket cube: one axis with quarter twists, two with half twists
-    # # 5040 states, reached in max_depth=13
+    # # pocket cube: one axis with quarter twists, one with half twists
+    # # 120 states, max depth 11
     # cube_size = 2
     # valid_actions = (
     #     (0,1,1), (0,1,2), (0,1,3),
-    #     (1,1,2),
-    #     (2,1,2),
+    #     (1,1,2), 
     # )
-    # cube_str = "s5040"
-    # tree_depth = 13
+    # cube_str = "s120"
+    # tree_depth = 11
+
+    # pocket cube: one axis with quarter twists, two with half twists
+    # 5040 states, reached in max_depth=13
+    cube_size = 2
+    valid_actions = (
+        (0,1,1), (0,1,2), (0,1,3),
+        (1,1,2),
+        (2,1,2),
+    )
+    cube_str = "s5040"
+    tree_depth = 13
 
     use_safe_depth = False
     max_depth = 1
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     color_neutral = False
 
     num_problems = 32
-    eval_period = 100
+    eval_period = 1000
     correctness_bar = 1.1
     gamma = .99
     correctness_bar = 1.0
@@ -101,8 +101,7 @@ if __name__ == "__main__":
     assert inc_sampler in eval_samplers
 
     num_candidates = 16
-    max_iters = 10000
-    ema_factor = 0
+    max_iters = 50000
     keep_one = int(True)
 
     breakpoint = -1
@@ -115,7 +114,8 @@ if __name__ == "__main__":
     dump_period = 10000
     dump_dir = "dtw"
     dump_base = "N%d%s_D%d_M%d_cn%d_%s_P%d_e%s" % (
-        cube_size, cube_str, tree_depth, max_depth, color_neutral, inc_sampler, num_candidates, ema_factor)
+        cube_size, cube_str, tree_depth, max_depth, color_neutral, inc_sampler, num_candidates, gamma)
+    print(dump_base)
 
     import itertools as it
     from cube import CubeDomain
