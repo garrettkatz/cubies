@@ -28,8 +28,8 @@ def uniform(rng, states, paths):
 if __name__ == "__main__":
 
     # config
-    do_cons = False
-    show_results = True
+    do_cons = True
+    show_results = False
     confirm = False
     confirm_show = False
 
@@ -64,14 +64,14 @@ if __name__ == "__main__":
     eval_period = 1
     correctness_bar = 1.1
     gamma = .99
-    inc_sampler = "scrambled"
+    inc_sampler = "uniform"
     eval_samplers = ["scrambled", "uniform"]
     # eval_samplers = ["scrambled"]
     assert inc_sampler in eval_samplers
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 1
+    num_reps = 30
     break_seconds = 0 * 60
     verbose = True
 
@@ -198,6 +198,11 @@ if __name__ == "__main__":
 
     if show_results:
 
+        from matplotlib import rcParams
+        # rcParams['font.family'] = 'sans-serif'
+        rcParams['font.family'] = 'serif'
+        rcParams['font.size'] = 9
+
         # rep = 0
         # dump_name = "%s_r%d" % (dump_base, rep)
         # # with open("%s/%s.pkl" % (dump_dir, dump_name), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
@@ -262,25 +267,62 @@ if __name__ == "__main__":
         #         pass
                 
 
-        pt.subplot(4,1,1)
+        # pt.subplot(4,1,1)
+        # pt.plot(static_incs, 'k-')
+        # pt.ylabel("Consecutive static")
+        # pt.subplot(4,1,2)
+        # pt.plot(folkliness, 'k-')
+        # pt.ylabel("Folkliness")
+        # pt.subplot(4,1,3)
+        # # pt.plot(sampled_correct, '-', color=(.5,)*3, label="Sample")
+        # pt.plot(inc_correct, '-', color=(.5,)*3, label="Online")
+        # pt.plot(true_correct, '-', color=(0,)*3, label="Population")
+        # pt.legend()
+        # pt.ylabel("Correctness")
+        # pt.subplot(4,1,4)
+        # # pt.plot(sampled_godliness, '-', color=(.5,)*3, label="Sample")
+        # pt.plot(inc_godliness, '-', color=(.5,)*3, label="Online")
+        # pt.plot(true_godliness, '-', color=(0,)*3, label="Population")
+        # pt.legend()
+        # pt.ylabel("Godliness")
+        # pt.xlabel("Number of incorporations")
+        # pt.tight_layout()
+        # pt.show()
+
+        pt.figure(figsize=(3.5, 3))
+        pt.subplot(2,1,1)
         pt.plot(static_incs, 'k-')
-        pt.ylabel("Consecutive static")
-        pt.subplot(4,1,2)
-        pt.plot(folkliness, 'k-')
-        pt.ylabel("Folkliness")
-        pt.subplot(4,1,3)
-        # pt.plot(sampled_correct, '-', color=(.75,)*3, label="Sample")
-        pt.plot(inc_correct, '-', color=(.75,)*3, label="Online")
-        pt.plot(true_correct, '-', color=(0,)*3, label="Population")
+        pt.ylabel("Static Window")
+        pt.subplot(2,1,2)
+        pt.plot(true_correct, '-', color=(.75,)*3, label="Ground truth")
+        pt.plot(inc_correct, '-', color=(0,)*3, label="EMA")
+        # if inc_sampler == "scrambled":
+        #     pt.plot(sampled_correct, '--', color=(0,)*3, label="Random sample")
         pt.legend()
         pt.ylabel("Correctness")
-        pt.subplot(4,1,4)
-        # pt.plot(sampled_godliness, '-', color=(.75,)*3, label="Sample")
-        pt.plot(inc_godliness, '-', color=(.75,)*3, label="Online")
-        pt.plot(true_godliness, '-', color=(0,)*3, label="Population")
-        pt.legend()
-        pt.ylabel("Godliness")
-        pt.xlabel("Incs")
+        pt.xlabel("Number of incorporations")
+        pt.tight_layout()
+        pt.savefig("acons_%s.pdf" % dump_name)
+        # pt.show()
+        pt.close()
+
+        pt.figure(figsize=(3.5, 3))
+        data = [[],[]]
+        for s, sampler in enumerate(["scrambled", "uniform"]):
+            for rep in range(num_reps):
+
+                fname = "N%d%s_D%d_M%d_cn%d_%s_cb%s_r%d" % (
+                    cube_size, cube_str, tree_depth, max_depth, color_neutral, sampler, correctness_bar, rep)
+                print(fname)
+                if not os.path.exists("%s/%s.pkl" % (dump_dir, fname)): break
+                with open("%s/%s.pkl" % (dump_dir, fname), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
+                num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
+                data[s].append(num_incs)
+
+        pt.hist(data)
+        pt.xlabel("Iterations to convergence")
+        pt.ylabel("Frequency")
+        pt.legend(["Scrambled","Uniform"])
         pt.show()
 
         # # for rep in range(num_reps):

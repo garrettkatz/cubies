@@ -48,8 +48,8 @@ class Trail:
 if __name__ == "__main__":
 
     # config
-    do_cons = True
-    show_results = False
+    do_cons = False
+    show_results = True
     confirm = False
     confirm_show = False
 
@@ -214,7 +214,6 @@ if __name__ == "__main__":
                     [scalarized[i], scalarized[n], scalarized[n]],
                     '-', color=(1 - n / len(leaves),)*3)
 
-
             n = np.argmax(scalarized)
             inc = num_incs[n]
             while True:
@@ -241,6 +240,7 @@ if __name__ == "__main__":
 
         pt.show()        
 
+        most_folksy, folksy_rules = None, None
         for rep in range(num_reps):
             dump_name = "%s_r%d" % (dump_base, rep)
             dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
@@ -252,17 +252,54 @@ if __name__ == "__main__":
             sample_scalarized, exhaust_scalarized, sample_objectives, exhaust_objectives = zip(*evals)
     
             for sp, name in enumerate(["Sample", "Population"]):
+                pt.subplot(1,2,sp+1)
+
                 scalarized = [sample_scalarized, exhaust_scalarized][sp]
                 best = np.argmax(scalarized)
                 objectives = [sample_objectives, exhaust_objectives][sp]
                 _, godliness, folkliness = zip(*objectives)
-                pt.subplot(1,2,sp+1)
-                pt.scatter(folkliness, godliness, color=(.5,)*3, zorder=1)
-                pt.scatter(folkliness[best], godliness[best], color=(.0,)*3, zorder=2)
                 pt.xlabel("Folksiness")
                 pt.ylabel("Godliness")
-                pt.title(name)
+
+                if sp == 0 and (most_folksy == None or folkliness[best] > most_folksy):
+                    most_folksy = folkliness[best]
+                    folksy_rules = rules
+
+                # from constructor:
+                # godliness = mean(0 if not solved else 1 / max(alg_moves,1)) # just try to take smaller step counts on average
+                # folkliness = 1 - self.num_rules / self.max_rules
+                godliness = 1 / np.array(godliness) # num steps
+                folkliness = (1 - np.array(folkliness)) * max_rules # num rules
+                pt.xlabel("Number of rules")
+                pt.ylabel("Average solution length")
+
+        #         pt.scatter(folkliness, godliness, color=(.5,)*3, zorder=1)
+        #         pt.scatter(folkliness[best], godliness[best], color=(.0,)*3, zorder=2)
+        #         pt.title(name)
     
-        pt.show()        
-    
-    
+        # pt.show()
+        pt.close()
+
+        ### show folksy pdb
+        pt.figure(figsize=(15, 10))
+        patterns, wildcards, macros = folksy_rules
+        numrows = min(7, len(macros))
+        numcols = min(15, max(map(len, macros)) + 3)
+        for r in range(numrows):
+            rule = r if r < numrows/2 else len(patterns)-(numrows-r)
+            ax = domain.render_subplot(numrows, numcols, r*numcols + 1, patterns[rule])
+            if r == 0: ax.set_title("pattern")
+            ax = domain.render_subplot(numrows, numcols, r*numcols + 2, patterns[rule] * (1 - wildcards[rule]))
+            if r == 0: ax.set_title("trigger")
+            else: ax.set_title(str(wildcards[rule].sum()))
+            ax = domain.render_subplot(numrows, numcols, r*numcols + 3, domain.orientations_of(patterns[rule] * (1 - wildcards[rule]))[7])
+            if r == 0: ax.set_title("behind")
+            state = patterns[rule]
+            for m in range(len(macros[rule])):
+                if 3+m+1 > numcols: break
+                state = domain.perform(macros[rule][m], state)
+                ax = domain.render_subplot(numrows, numcols, r*numcols + 3 + m+1, state)
+                ax.set_title(str(macros[rule][m]))
+        # pt.tight_layout()
+        pt.show()
+
