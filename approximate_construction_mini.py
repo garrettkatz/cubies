@@ -71,7 +71,7 @@ if __name__ == "__main__":
 
     breakpoint = -1
     # breakpoint = 100
-    num_reps = 30
+    num_reps = 100
     break_seconds = 0 * 60
     verbose = True
 
@@ -92,6 +92,7 @@ if __name__ == "__main__":
     
     all_states = tree.states_rooted_at(init)
     optimal_paths = tuple(map(tuple, map(domain.reverse, tree.paths()))) # from state to solved
+    all_probs = list(zip(all_states, optimal_paths))
     max_rules = len(all_states)
 
     max_scramble_length = max_actions - max_depth
@@ -151,8 +152,8 @@ if __name__ == "__main__":
 
                     # if inc_sampler == "scrambled": probs = [scrambled_sample() for _ in range(len(all_states))]
                     # if inc_sampler == "uniform": probs = list(zip(all_states, optimal_paths))
-                    probs = list(zip(all_states, optimal_paths))
-                    exhaust_objectives.append(constructor.evaluate(probs))
+                    # exhaust_objectives.append(constructor.evaluate(probs))
+                    exhaust_objectives.append(constructor.evaluate(all_probs))
 
                     if inc_sampler == "scrambled": correctness, godliness, _ = scrambled_objectives[-1]
                     if inc_sampler == "uniform": correctness, godliness, _ = uniform_objectives[-1]
@@ -201,7 +202,10 @@ if __name__ == "__main__":
         from matplotlib import rcParams
         # rcParams['font.family'] = 'sans-serif'
         rcParams['font.family'] = 'serif'
-        rcParams['font.size'] = 9
+        rcParams['font.size'] = 12
+        rcParams['text.usetex'] = True
+        # rcParams['pdf.fonttype'] = 42
+        # rcParams['ps.fonttype'] = 42
 
         # rep = 0
         # dump_name = "%s_r%d" % (dump_base, rep)
@@ -244,8 +248,8 @@ if __name__ == "__main__":
         inc_correct, inc_godliness = map(list, (inc_correct, inc_godliness))
         
         # EMA
-        # inc_correct[0] = 0
-        # inc_godliness[0] = 0
+        inc_correct[0] = 0
+        inc_godliness[0] = 0
         for k in range(1, len(inc_correct)):
             inc_correct[k] = gamma * inc_correct[k-1] + (1 - gamma) * inc_correct[k]
             inc_godliness[k] = gamma * inc_godliness[k-1] + (1 - gamma) * inc_godliness[k]
@@ -289,45 +293,66 @@ if __name__ == "__main__":
         # pt.tight_layout()
         # pt.show()
 
-        pt.figure(figsize=(3.5, 3))
+        pt.figure(figsize=(4, 3))
         pt.subplot(2,1,1)
         pt.plot(static_incs, 'k-')
         pt.ylabel("Static Window")
         pt.subplot(2,1,2)
         pt.plot(true_correct, '-', color=(.75,)*3, label="Ground truth")
+        # pt.plot(range(200, len(inc_correct)), inc_correct[200:], '-', color=(0,)*3, label="EMA")
         pt.plot(inc_correct, '-', color=(0,)*3, label="EMA")
-        if inc_sampler == "scrambled":
-            pt.plot(np.arange(0,len(sampled_correct),10), sampled_correct[::10], '--', color=(0,)*3, label="Random sample")
+        # if inc_sampler == "scrambled":
+        #     pt.plot(np.arange(0,len(sampled_correct),10), sampled_correct[::10], '--', color=(0,)*3, label="Random sample")
         pt.legend()
         pt.ylabel("Correctness")
         pt.xlabel("Number of incorporations")
         pt.tight_layout()
         pt.savefig("acons_%s.pdf" % dump_name)
-        # pt.show()
+        pt.show()
         pt.close()
 
-        pt.figure(figsize=(3.5, 3))
-        data = [[],[]]
-        for s, sampler in enumerate(["uniform", "scrambled"]):
-            for rep in range(num_reps):
+        pt.figure(figsize=(4, 2))
+        data = []
+        for rep in range(num_reps):
 
-                fname = "N%d%s_D%d_M%d_cn%d_%s_cb%s_r%d" % (
-                    cube_size, cube_str, tree_depth, max_depth, color_neutral, sampler, correctness_bar, rep)
-                print(fname)
-                if not os.path.exists("%s/%s.pkl" % (dump_dir, fname)): break
-                with open("%s/%s.pkl" % (dump_dir, fname), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
-                num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
-                data[s].append(num_incs)
+            fname = "N%d%s_D%d_M%d_cn%d_%s_cb%s_r%d" % (
+                cube_size, cube_str, tree_depth, max_depth, color_neutral, inc_sampler, correctness_bar, rep)
+            print(fname)
+            if not os.path.exists("%s/%s.pkl" % (dump_dir, fname)): break
+            with open("%s/%s.pkl" % (dump_dir, fname), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
+            num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
+            data.append(num_incs)
 
         # pt.hist(data, color=[(1,)*3, (.5,)*3], ec='k')
-        pt.hist(data[0], bins = np.arange(0,max(data[0]),200), color=(.5,)*3, ec='k', rwidth=.75, align="left")
-        pt.hist(data[1], bins = np.arange(0,max(data[1]),200), color=(1,)*3, ec='k', rwidth=.75, align="right")
+        pt.hist(data, bins = np.arange(0,max(data),500), color=(1,)*3, ec='k', rwidth=.75, align="left")
         pt.xlabel("Iterations to convergence")
         pt.ylabel("Frequency")
-        pt.legend(["Scrambled","Uniform"])
         pt.tight_layout()
         pt.savefig("acons_%s_hist.pdf" % cube_str)
         pt.show()
+
+        # pt.figure(figsize=(3.5, 3))
+        # data = [[],[]]
+        # for s, sampler in enumerate(["uniform", "scrambled"]):
+        #     for rep in range(num_reps):
+
+        #         fname = "N%d%s_D%d_M%d_cn%d_%s_cb%s_r%d" % (
+        #             cube_size, cube_str, tree_depth, max_depth, color_neutral, sampler, correctness_bar, rep)
+        #         print(fname)
+        #         if not os.path.exists("%s/%s.pkl" % (dump_dir, fname)): break
+        #         with open("%s/%s.pkl" % (dump_dir, fname), "rb") as f: (rules, logs, objectives, static_incs, inc_states) = pk.load(f)
+        #         num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
+        #         data[s].append(num_incs)
+
+        # # pt.hist(data, color=[(1,)*3, (.5,)*3], ec='k')
+        # pt.hist(data[0], bins = np.arange(0,max(data[0]),200), color=(.5,)*3, ec='k', rwidth=.75, align="left")
+        # pt.hist(data[1], bins = np.arange(0,max(data[1]),200), color=(1,)*3, ec='k', rwidth=.75, align="right")
+        # pt.xlabel("Iterations to convergence")
+        # pt.ylabel("Frequency")
+        # pt.legend(["Scrambled","Uniform"])
+        # pt.tight_layout()
+        # pt.savefig("acons_%s_hist.pdf" % cube_str)
+        # pt.show()
 
         # # for rep in range(num_reps):
         # for rep in range(3):

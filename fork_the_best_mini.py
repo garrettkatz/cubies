@@ -48,8 +48,8 @@ class Trail:
 if __name__ == "__main__":
 
     # config
-    do_cons = True
-    show_results = False
+    do_cons = False
+    show_results = True
     confirm = False
     confirm_show = False
 
@@ -194,7 +194,8 @@ if __name__ == "__main__":
         from matplotlib import rcParams
         # rcParams['font.family'] = 'sans-serif'
         rcParams['font.family'] = 'serif'
-        rcParams['font.size'] = 9
+        rcParams['font.size'] = 12
+        rcParams['text.usetex'] = True
 
         rep = 0
         dump_name = "%s_r%d" % (dump_base, rep)
