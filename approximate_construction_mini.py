@@ -64,7 +64,7 @@ if __name__ == "__main__":
     eval_period = 1
     correctness_bar = 1.1
     gamma = .99
-    inc_sampler = "scrambled"
+    inc_sampler = "uniform"
     eval_samplers = ["scrambled", "uniform"]
     # eval_samplers = ["scrambled"]
     assert inc_sampler in eval_samplers
@@ -293,7 +293,7 @@ if __name__ == "__main__":
         # pt.tight_layout()
         # pt.show()
 
-        pt.figure(figsize=(4, 3))
+        pt.figure(figsize=(3.5, 2.5))
         pt.subplot(2,1,1)
         pt.plot(static_incs, 'k-')
         pt.ylabel("Static Window")

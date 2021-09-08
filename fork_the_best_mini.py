@@ -207,7 +207,7 @@ if __name__ == "__main__":
         evals, parent_index, fork_inc, num_incs = zip(*leaves)
         sample_scalarized, exhaust_scalarized, _, _ = zip(*evals)
         
-        pt.figure(figsize=(3.5, 6.5))
+        pt.figure(figsize=(3.5, 5))
         for sp, name in enumerate(["Sample", "Ground truth"]):
             pt.subplot(3,1,sp+1)
             pt.title(name)
@@ -251,7 +251,7 @@ if __name__ == "__main__":
         pt.show()
         pt.close()
 
-        pt.figure(figsize=(3.5, 4.5))
+        pt.figure(figsize=(3.5, 2))
         most_folksy, folksy_rules = None, None
         for rep in range(num_reps):
             dump_name = "%s_r%d" % (dump_base, rep)
@@ -264,14 +264,14 @@ if __name__ == "__main__":
             sample_scalarized, exhaust_scalarized, sample_objectives, exhaust_objectives = zip(*evals)
     
             for sp, name in enumerate(["Sample", "Population"]):
-                pt.subplot(2,1,sp+1)
+                pt.subplot(1,2,sp+1)
 
                 scalarized = [sample_scalarized, exhaust_scalarized][sp]
                 best = np.argmax(scalarized)
                 objectives = [sample_objectives, exhaust_objectives][sp]
                 _, godliness, folkliness = zip(*objectives)
                 pt.xlabel("Folksiness")
-                pt.ylabel("Godliness")
+                if sp == 0: pt.ylabel("Godliness")
 
                 if sp == 0 and (most_folksy == None or folkliness[best] > most_folksy):
                     most_folksy = folkliness[best]
@@ -283,10 +283,11 @@ if __name__ == "__main__":
                 godliness = 1 / np.array(godliness) # num steps
                 folkliness = (1 - np.array(folkliness)) * max_rules # num rules
                 pt.xlabel("Number of rules")
-                pt.ylabel("Average solution length")
+                if sp == 0: pt.ylabel("Avg. soln. length")
 
-                pt.scatter(folkliness, godliness, color=(.5,)*3, zorder=1)
+                pt.scatter(folkliness[::10], godliness[::10], color=(.5,)*3, zorder=1)
                 pt.scatter(folkliness[best], godliness[best], color=(.0,)*3, zorder=2)
+                pt.ylim([0, 20])
                 pt.title(name)
     
         pt.tight_layout()
