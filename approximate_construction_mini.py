@@ -64,7 +64,7 @@ if __name__ == "__main__":
     eval_period = 1
     correctness_bar = 1.1
     gamma = .99
-    inc_sampler = "scrambled"
+    inc_sampler = "uniform"
     eval_samplers = ["scrambled", "uniform"]
     # eval_samplers = ["scrambled"]
     assert inc_sampler in eval_samplers
@@ -289,24 +289,24 @@ if __name__ == "__main__":
         # pt.tight_layout()
         # pt.show()
 
-        pt.figure(figsize=(3.5, 3))
+        pt.figure(figsize=(3.5, 2.5))
         pt.subplot(2,1,1)
         pt.plot(static_incs, 'k-')
         pt.ylabel("Static Window")
         pt.subplot(2,1,2)
         pt.plot(true_correct, '-', color=(.75,)*3, label="Ground truth")
         pt.plot(inc_correct, '-', color=(0,)*3, label="EMA")
-        if inc_sampler == "scrambled":
-            pt.plot(np.arange(0,len(sampled_correct),10), sampled_correct[::10], '--', color=(0,)*3, label="Random sample")
+        # if inc_sampler == "scrambled":
+        #     pt.plot(np.arange(0,len(sampled_correct),10), sampled_correct[::10], '--', color=(0,)*3, label="Random sample")
         pt.legend()
         pt.ylabel("Correctness")
         pt.xlabel("Number of incorporations")
         pt.tight_layout()
         pt.savefig("acons_%s.pdf" % dump_name)
-        # pt.show()
+        pt.show()
         pt.close()
 
-        pt.figure(figsize=(3.5, 3))
+        pt.figure(figsize=(3.5, 1.5))
         data = [[],[]]
         for s, sampler in enumerate(["uniform", "scrambled"]):
             for rep in range(num_reps):
