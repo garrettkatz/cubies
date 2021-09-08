@@ -64,7 +64,7 @@ if __name__ == "__main__":
     eval_period = 1
     correctness_bar = 1.1
     gamma = .99
-    inc_sampler = "uniform"
+    inc_sampler = "scrambled"
     eval_samplers = ["scrambled", "uniform"]
     # eval_samplers = ["scrambled"]
     assert inc_sampler in eval_samplers
@@ -202,7 +202,7 @@ if __name__ == "__main__":
         from matplotlib import rcParams
         # rcParams['font.family'] = 'sans-serif'
         rcParams['font.family'] = 'serif'
-        rcParams['font.size'] = 12
+        rcParams['font.size'] = 9
         rcParams['text.usetex'] = True
         # rcParams['pdf.fonttype'] = 42
         # rcParams['ps.fonttype'] = 42
@@ -296,23 +296,25 @@ if __name__ == "__main__":
         pt.figure(figsize=(3.5, 2.5))
         pt.subplot(2,1,1)
         pt.plot(static_incs, 'k-')
-        pt.ylabel("Static Window")
+        pt.ylabel("Static")
         pt.subplot(2,1,2)
         pt.plot(true_correct, '-', color=(.75,)*3, label="Ground truth")
         # pt.plot(range(200, len(inc_correct)), inc_correct[200:], '-', color=(0,)*3, label="EMA")
         pt.plot(inc_correct, '-', color=(0,)*3, label="EMA")
         # if inc_sampler == "scrambled":
-        #     pt.plot(np.arange(0,len(sampled_correct),10), sampled_correct[::10], '--', color=(0,)*3, label="Random sample")
-        pt.legend()
-        pt.ylabel("Correctness")
+        #     pt.plot(np.arange(0,len(sampled_correct),10), sampled_correct[::10], ':', color=(0,)*3, label="Random sample")
+        pt.legend(fontsize=9)
+        pt.ylabel("Correct")
         pt.xlabel("Number of incorporations")
         pt.tight_layout()
         pt.savefig("acons_%s.pdf" % dump_name)
         pt.show()
         pt.close()
 
-        pt.figure(figsize=(4, 2))
+        pt.figure(figsize=(3.5, 1.5))
         data = []
+        early_stops, early_trues = [], []
+        varphi_stops, varphi_threshes = [], []
         for rep in range(num_reps):
 
             fname = "N%d%s_D%d_M%d_cn%d_%s_cb%s_r%d" % (
@@ -323,10 +325,47 @@ if __name__ == "__main__":
             num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
             data.append(num_incs)
 
+            if inc_sampler == "scrambled":
+                sampled_correct, sampled_godliness, folkliness = list(zip(*objectives[0]))
+            if inc_sampler == "uniform":
+                sampled_correct, sampled_godliness, folkliness = list(zip(*objectives[1]))
+            true_correct, true_godliness, _ = list(zip(*objectives[2]))
+            inc_correct, inc_godliness, _ = list(zip(*objectives[3]))
+            inc_correct, inc_godliness = map(list, (inc_correct, inc_godliness))            
+            # EMA
+            inc_correct[0] = 0
+            inc_godliness[0] = 0
+            for k in range(1, len(inc_correct)):
+                inc_correct[k] = gamma * inc_correct[k-1] + (1 - gamma) * inc_correct[k]
+                inc_godliness[k] = gamma * inc_godliness[k-1] + (1 - gamma) * inc_godliness[k]
+            assert len(true_correct) == len(sampled_correct)
+
+            early_eval = np.flatnonzero(np.array(sampled_correct) == 1.0)
+            if len(early_eval) > 0:
+                early_stops.append(early_eval[0] * eval_period)
+                early_trues.append(true_correct[early_eval[0]])
+
+            varphi_eval = np.flatnonzero(np.array(true_correct) > .99)
+            if len(varphi_eval) > 0:
+                varphi_stops.append(varphi_eval[0] * eval_period)
+                varphi_threshes.append(inc_correct[varphi_eval[0] * eval_period])
+
         # pt.hist(data, color=[(1,)*3, (.5,)*3], ec='k')
+        pt.subplot(1,2,1)
         pt.hist(data, bins = np.arange(0,max(data),500), color=(1,)*3, ec='k', rwidth=.75, align="left")
-        pt.xlabel("Iterations to convergence")
+        pt.xlabel("Convergence")
         pt.ylabel("Frequency")
+
+        # pt.subplot(1,3,2)
+        # pt.plot(early_stops, early_trues, 'k.')
+        # pt.xlabel("Early stop iteration")
+        # pt.ylabel("True correctness")
+
+        pt.subplot(1,2,2)
+        pt.plot(varphi_stops, varphi_threshes, 'k.')
+        pt.xlabel("0.99 Convergence time")
+        pt.ylabel("Threshold")
+
         pt.tight_layout()
         pt.savefig("acons_%s_hist.pdf" % cube_str)
         pt.show()

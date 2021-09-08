@@ -48,8 +48,8 @@ class Trail:
 if __name__ == "__main__":
 
     # config
-    do_cons = False
-    show_results = True
+    do_cons = True
+    show_results = False
     confirm = False
     confirm_show = False
 
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     decay_rate = .99
     correctness_bar = 1.1
     max_incs = 50000
-    inc_sampler = "uniform"
+    inc_sampler = "scrambled"
 
     num_reps = 100
     break_seconds = 0 * 60
@@ -117,8 +117,9 @@ if __name__ == "__main__":
     if inc_sampler == "uniform": sample = uniform(rng, all_states, optimal_paths)
     if inc_sampler == "scrambled": sample = scrambled(domain, rng, max_scramble_length)
 
-    if inc_sampler == "uniform": all_probs = list(zip(all_states, optimal_paths))
-    if inc_sampler == "scrambled": all_probs = [sample() for _ in range(3*len(all_states))]
+    # if inc_sampler == "uniform": all_probs = list(zip(all_states, optimal_paths))
+    # if inc_sampler == "scrambled": all_probs = [sample() for _ in range(3*len(all_states))]
+    all_probs = list(zip(all_states, optimal_paths))
 
     if do_cons:
 
@@ -140,7 +141,7 @@ if __name__ == "__main__":
                 trail.run_to_convergence(verbose_prefix)
                 probs = [sample() for _ in range(num_eval_problems)]
                 sample_objectives = trail.constructor.evaluate(probs)
-                exhaust_objectives = trail.constructor.evaluate(all_probs)
+                exhaust_objectives = trail.constructor.evaluate(trail.all_probs)
                 sample_scalarized = scalarize(sample_objectives[1:])
                 exhaust_scalarized = scalarize(exhaust_objectives[1:])
                 return sample_scalarized, exhaust_scalarized, sample_objectives, exhaust_objectives
@@ -258,7 +259,7 @@ if __name__ == "__main__":
             dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
             with open(dump_path, "rb") as f:
                 (rules, logs, weights, leaves) = pk.load(f)
-            print("weights:", *weights)
+            print(rep, "weights:", *weights)
     
             evals, parent_index, fork_inc, num_incs = zip(*leaves)
             sample_scalarized, exhaust_scalarized, sample_objectives, exhaust_objectives = zip(*evals)
