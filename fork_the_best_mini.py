@@ -48,8 +48,8 @@ class Trail:
 if __name__ == "__main__":
 
     # config
-    do_cons = False
-    show_results = True
+    do_cons = True
+    show_results = False
     confirm = False
     confirm_show = False
 
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     color_neutral = False
 
     num_forks = 500
-    num_eval_problems = 120*3
+    num_eval_problems = 32
     exhaust_period = 100
 
     decay_rate = .99
@@ -95,8 +95,8 @@ if __name__ == "__main__":
     # set up descriptive dump name
     dump_period = 10000
     dump_dir = "ftb"
-    dump_base = "N%d%s_D%d_M%d_cn%d_%s_e%s" % (
-        cube_size, cube_str, tree_depth, max_depth, color_neutral, inc_sampler, decay_rate)
+    dump_base = "N%d%s_D%d_M%d_cn%d_%s_P%d_e%s" % (
+        cube_size, cube_str, tree_depth, max_depth, color_neutral, inc_sampler, num_eval_problems, decay_rate)
     print(dump_base)
 
     from cube import CubeDomain
@@ -191,6 +191,11 @@ if __name__ == "__main__":
 
     if show_results:
 
+        from matplotlib import rcParams
+        # rcParams['font.family'] = 'sans-serif'
+        rcParams['font.family'] = 'serif'
+        rcParams['font.size'] = 9
+
         rep = 0
         dump_name = "%s_r%d" % (dump_base, rep)
         dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
@@ -200,9 +205,10 @@ if __name__ == "__main__":
 
         evals, parent_index, fork_inc, num_incs = zip(*leaves)
         sample_scalarized, exhaust_scalarized, _, _ = zip(*evals)
-
-        for sp, name in enumerate(["Sample", "Population"]):
-            pt.subplot(1,3,sp+1)
+        
+        pt.figure(figsize=(3.5, 6.5))
+        for sp, name in enumerate(["Sample", "Ground truth"]):
+            pt.subplot(3,1,sp+1)
             pt.title(name)
 
             scalarized = [sample_scalarized, exhaust_scalarized][sp]
@@ -212,7 +218,9 @@ if __name__ == "__main__":
                 pt.plot(
                     [fork_inc[i], fork_inc[i], num_incs[n]],
                     [scalarized[i], scalarized[n], scalarized[n]],
-                    '-', color=(1 - n / len(leaves),)*3)
+                    '-', color=(.75 - .5 * n / len(leaves),)*3)
+                    # '-', color=(.75 * n / len(leaves),)*3)
+                    # '-', color=(.5,)*3)
 
             n = np.argmax(scalarized)
             inc = num_incs[n]
@@ -227,19 +235,22 @@ if __name__ == "__main__":
                 n = i
                 inc = fork_inc[i]
 
-            pt.xlabel("incs")
-            pt.ylabel("scalarized")
+            pt.xlabel("Number of modifications")
+            pt.ylabel("Scalarization value")
 
-        pt.subplot(1,3,3)
+        pt.subplot(3,1,3)
         sampled = [leaf[0][0] for leaf in leaves]
         exhaust = [leaf[0][1] for leaf in leaves]
         pt.scatter(sampled, exhaust, color='k')
         pt.xlabel("Sample")
-        pt.ylabel("Population")
-        pt.title("Scalarization")
+        pt.ylabel("Ground truth")
+        pt.title("Scalarization values")
+        pt.tight_layout()
+        pt.savefig("ftb_%s.pdf" % dump_name)
+        pt.show()
+        pt.close()
 
-        pt.show()        
-
+        pt.figure(figsize=(3.5, 4.5))
         most_folksy, folksy_rules = None, None
         for rep in range(num_reps):
             dump_name = "%s_r%d" % (dump_base, rep)
@@ -252,7 +263,7 @@ if __name__ == "__main__":
             sample_scalarized, exhaust_scalarized, sample_objectives, exhaust_objectives = zip(*evals)
     
             for sp, name in enumerate(["Sample", "Population"]):
-                pt.subplot(1,2,sp+1)
+                pt.subplot(2,1,sp+1)
 
                 scalarized = [sample_scalarized, exhaust_scalarized][sp]
                 best = np.argmax(scalarized)
@@ -273,33 +284,35 @@ if __name__ == "__main__":
                 pt.xlabel("Number of rules")
                 pt.ylabel("Average solution length")
 
-        #         pt.scatter(folkliness, godliness, color=(.5,)*3, zorder=1)
-        #         pt.scatter(folkliness[best], godliness[best], color=(.0,)*3, zorder=2)
-        #         pt.title(name)
+                pt.scatter(folkliness, godliness, color=(.5,)*3, zorder=1)
+                pt.scatter(folkliness[best], godliness[best], color=(.0,)*3, zorder=2)
+                pt.title(name)
     
-        # pt.show()
+        pt.tight_layout()
+        pt.savefig("ftb_s120_pareto.pdf")
+        pt.show()
         pt.close()
 
-        ### show folksy pdb
-        pt.figure(figsize=(15, 10))
-        patterns, wildcards, macros = folksy_rules
-        numrows = min(7, len(macros))
-        numcols = min(15, max(map(len, macros)) + 3)
-        for r in range(numrows):
-            rule = r if r < numrows/2 else len(patterns)-(numrows-r)
-            ax = domain.render_subplot(numrows, numcols, r*numcols + 1, patterns[rule])
-            if r == 0: ax.set_title("pattern")
-            ax = domain.render_subplot(numrows, numcols, r*numcols + 2, patterns[rule] * (1 - wildcards[rule]))
-            if r == 0: ax.set_title("trigger")
-            else: ax.set_title(str(wildcards[rule].sum()))
-            ax = domain.render_subplot(numrows, numcols, r*numcols + 3, domain.orientations_of(patterns[rule] * (1 - wildcards[rule]))[7])
-            if r == 0: ax.set_title("behind")
-            state = patterns[rule]
-            for m in range(len(macros[rule])):
-                if 3+m+1 > numcols: break
-                state = domain.perform(macros[rule][m], state)
-                ax = domain.render_subplot(numrows, numcols, r*numcols + 3 + m+1, state)
-                ax.set_title(str(macros[rule][m]))
-        # pt.tight_layout()
-        pt.show()
+        # ### show folksy pdb
+        # pt.figure(figsize=(15, 10))
+        # patterns, wildcards, macros = folksy_rules
+        # numrows = min(7, len(macros))
+        # numcols = min(15, max(map(len, macros)) + 3)
+        # for r in range(numrows):
+        #     rule = r if r < numrows/2 else len(patterns)-(numrows-r)
+        #     ax = domain.render_subplot(numrows, numcols, r*numcols + 1, patterns[rule])
+        #     if r == 0: ax.set_title("pattern")
+        #     ax = domain.render_subplot(numrows, numcols, r*numcols + 2, patterns[rule] * (1 - wildcards[rule]))
+        #     if r == 0: ax.set_title("trigger")
+        #     else: ax.set_title(str(wildcards[rule].sum()))
+        #     ax = domain.render_subplot(numrows, numcols, r*numcols + 3, domain.orientations_of(patterns[rule] * (1 - wildcards[rule]))[7])
+        #     if r == 0: ax.set_title("behind")
+        #     state = patterns[rule]
+        #     for m in range(len(macros[rule])):
+        #         if 3+m+1 > numcols: break
+        #         state = domain.perform(macros[rule][m], state)
+        #         ax = domain.render_subplot(numrows, numcols, r*numcols + 3 + m+1, state)
+        #         ax.set_title(str(macros[rule][m]))
+        # # pt.tight_layout()
+        # pt.show()
 

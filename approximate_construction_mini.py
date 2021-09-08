@@ -28,8 +28,8 @@ def uniform(rng, states, paths):
 if __name__ == "__main__":
 
     # config
-    do_cons = True
-    show_results = False
+    do_cons = False
+    show_results = True
     confirm = False
     confirm_show = False
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     eval_period = 1
     correctness_bar = 1.1
     gamma = .99
-    inc_sampler = "uniform"
+    inc_sampler = "scrambled"
     eval_samplers = ["scrambled", "uniform"]
     # eval_samplers = ["scrambled"]
     assert inc_sampler in eval_samplers
@@ -149,9 +149,9 @@ if __name__ == "__main__":
                         probs = [uniform_sample() for _ in range(num_problems)]
                         uniform_objectives.append(constructor.evaluate(probs))
 
-                    if inc_sampler == "scrambled": probs = [scrambled_sample() for _ in range(len(all_states))]
-                    if inc_sampler == "uniform": probs = list(zip(all_states, optimal_paths))
-                    # probs = list(zip(all_states, optimal_paths))
+                    # if inc_sampler == "scrambled": probs = [scrambled_sample() for _ in range(len(all_states))]
+                    # if inc_sampler == "uniform": probs = list(zip(all_states, optimal_paths))
+                    probs = list(zip(all_states, optimal_paths))
                     exhaust_objectives.append(constructor.evaluate(probs))
 
                     if inc_sampler == "scrambled": correctness, godliness, _ = scrambled_objectives[-1]
@@ -296,8 +296,8 @@ if __name__ == "__main__":
         pt.subplot(2,1,2)
         pt.plot(true_correct, '-', color=(.75,)*3, label="Ground truth")
         pt.plot(inc_correct, '-', color=(0,)*3, label="EMA")
-        # if inc_sampler == "scrambled":
-        #     pt.plot(sampled_correct, '--', color=(0,)*3, label="Random sample")
+        if inc_sampler == "scrambled":
+            pt.plot(np.arange(0,len(sampled_correct),10), sampled_correct[::10], '--', color=(0,)*3, label="Random sample")
         pt.legend()
         pt.ylabel("Correctness")
         pt.xlabel("Number of incorporations")
@@ -308,7 +308,7 @@ if __name__ == "__main__":
 
         pt.figure(figsize=(3.5, 3))
         data = [[],[]]
-        for s, sampler in enumerate(["scrambled", "uniform"]):
+        for s, sampler in enumerate(["uniform", "scrambled"]):
             for rep in range(num_reps):
 
                 fname = "N%d%s_D%d_M%d_cn%d_%s_cb%s_r%d" % (
@@ -319,10 +319,14 @@ if __name__ == "__main__":
                 num_rules, num_incs, inc_added, inc_disabled, chain_lengths = logs
                 data[s].append(num_incs)
 
-        pt.hist(data)
+        # pt.hist(data, color=[(1,)*3, (.5,)*3], ec='k')
+        pt.hist(data[0], bins = np.arange(0,max(data[0]),200), color=(.5,)*3, ec='k', rwidth=.75, align="left")
+        pt.hist(data[1], bins = np.arange(0,max(data[1]),200), color=(1,)*3, ec='k', rwidth=.75, align="right")
         pt.xlabel("Iterations to convergence")
         pt.ylabel("Frequency")
         pt.legend(["Scrambled","Uniform"])
+        pt.tight_layout()
+        pt.savefig("acons_%s_hist.pdf" % cube_str)
         pt.show()
 
         # # for rep in range(num_reps):
