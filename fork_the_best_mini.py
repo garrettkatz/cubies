@@ -48,8 +48,8 @@ class Trail:
 if __name__ == "__main__":
 
     # config
-    do_cons = True
-    show_results = False
+    do_cons = False
+    show_results = True
     confirm = False
     confirm_show = False
 
@@ -252,49 +252,108 @@ if __name__ == "__main__":
         pt.show()
         pt.close()
 
-        pt.figure(figsize=(3.5, 2))
-        most_folksy, folksy_rules = None, None
-        for rep in range(num_reps):
-            dump_name = "%s_r%d" % (dump_base, rep)
-            dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
-            with open(dump_path, "rb") as f:
-                (rules, logs, weights, leaves) = pk.load(f)
-            print(rep, "weights:", *weights)
+        pt.figure(figsize=(3.5, 3.25))
+        for sam,sampler in enumerate(["scrambled", "uniform"]):
+
+            dump_base = "N%d%s_D%d_M%d_cn%d_%s_P%d_e%s" % (
+                cube_size, cube_str, tree_depth, max_depth, color_neutral, sampler, num_eval_problems, decay_rate)
+
+            most_folksy, folksy_rules = None, None
+            for rep in range(num_reps):
+                dump_name = "%s_r%d" % (dump_base, rep)
+                dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
+                with open(dump_path, "rb") as f:
+                    (rules, logs, weights, leaves) = pk.load(f)
+                print(rep, "weights:", *weights)
+        
+                evals, parent_index, fork_inc, num_incs = zip(*leaves)
+                sample_scalarized, exhaust_scalarized, sample_objectives, exhaust_objectives = zip(*evals)
+        
+                # for sp, name in enumerate(["Samp.", "Pop."]):
+                for sp, name in enumerate([sampler, "population"]):
+                    pt.subplot(2,2,2*sam + sp+1)
     
-            evals, parent_index, fork_inc, num_incs = zip(*leaves)
-            sample_scalarized, exhaust_scalarized, sample_objectives, exhaust_objectives = zip(*evals)
+                    scalarized = [sample_scalarized, exhaust_scalarized][sp]
+                    best = np.argmax(scalarized)
+                    objectives = [sample_objectives, exhaust_objectives][sp]
+                    _, godliness, folkliness = zip(*objectives)
+                    if sam == 1: pt.xlabel("Folksiness")
+                    if sp == 0: pt.ylabel("Godliness")
     
-            for sp, name in enumerate(["Sample", "Population"]):
-                pt.subplot(1,2,sp+1)
+                    if sp == 0 and (most_folksy == None or folkliness[best] > most_folksy):
+                        most_folksy = folkliness[best]
+                        fewest_rules = (1 - most_folksy) * max_rules
+                        folksy_rules = rules
+    
+                    # from constructor:
+                    # godliness = mean(0 if not solved else 1 / max(alg_moves,1)) # just try to take smaller step counts on average
+                    # folkliness = 1 - self.num_rules / self.max_rules
+                    godliness = 1 / np.array(godliness) # num steps
+                    folkliness = (1 - np.array(folkliness)) * max_rules # num rules
+                    if sam == 1: pt.xlabel("Number of rules")
+                    if sp == 0: pt.ylabel("Avg. soln. len.")
+    
+                    # pt.scatter(folkliness[::20], godliness[::20], color=(.5,)*3, zorder=1)
+                    # pt.scatter(folkliness[best], godliness[best], color=(.0,)*3, zorder=2)
+                    pt.plot(folkliness[::50], godliness[::50], '.', color=(.5,)*3, zorder=1)
+                    pt.plot(folkliness[best], godliness[best], '.', color=(.0,)*3, zorder=2)
+                    if sam == 0: pt.ylim([0, 25])
+                    if sam == 1: pt.ylim([0, 15])
+                    # if sam == 0: pt.title(name)
+                    # pt.title("%s (%s)" % (name, sampler))
+                    pt.title(name, fontsize=12)
 
-                scalarized = [sample_scalarized, exhaust_scalarized][sp]
-                best = np.argmax(scalarized)
-                objectives = [sample_objectives, exhaust_objectives][sp]
-                _, godliness, folkliness = zip(*objectives)
-                pt.xlabel("Folksiness")
-                if sp == 0: pt.ylabel("Godliness")
-
-                if sp == 0 and (most_folksy == None or folkliness[best] > most_folksy):
-                    most_folksy = folkliness[best]
-                    folksy_rules = rules
-
-                # from constructor:
-                # godliness = mean(0 if not solved else 1 / max(alg_moves,1)) # just try to take smaller step counts on average
-                # folkliness = 1 - self.num_rules / self.max_rules
-                godliness = 1 / np.array(godliness) # num steps
-                folkliness = (1 - np.array(folkliness)) * max_rules # num rules
-                pt.xlabel("Number of rules")
-                if sp == 0: pt.ylabel("Avg. soln. length")
-
-                pt.scatter(folkliness[::10], godliness[::10], color=(.5,)*3, zorder=1)
-                pt.scatter(folkliness[best], godliness[best], color=(.0,)*3, zorder=2)
-                pt.ylim([0, 20])
-                pt.title(name)
+        print("most folksy", most_folksy)
+        print("fewest rules", fewest_rules)
     
         pt.tight_layout()
         pt.savefig("ftb_s120_pareto.pdf")
         pt.show()
         pt.close()
+
+        # pt.figure(figsize=(3.5, 2))
+        # most_folksy, folksy_rules = None, None
+        # for rep in range(num_reps):
+        #     dump_name = "%s_r%d" % (dump_base, rep)
+        #     dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
+        #     with open(dump_path, "rb") as f:
+        #         (rules, logs, weights, leaves) = pk.load(f)
+        #     print(rep, "weights:", *weights)
+    
+        #     evals, parent_index, fork_inc, num_incs = zip(*leaves)
+        #     sample_scalarized, exhaust_scalarized, sample_objectives, exhaust_objectives = zip(*evals)
+    
+        #     for sp, name in enumerate(["Sample", "Population"]):
+        #         pt.subplot(1,2,sp+1)
+
+        #         scalarized = [sample_scalarized, exhaust_scalarized][sp]
+        #         best = np.argmax(scalarized)
+        #         objectives = [sample_objectives, exhaust_objectives][sp]
+        #         _, godliness, folkliness = zip(*objectives)
+        #         pt.xlabel("Folksiness")
+        #         if sp == 0: pt.ylabel("Godliness")
+
+        #         if sp == 0 and (most_folksy == None or folkliness[best] > most_folksy):
+        #             most_folksy = folkliness[best]
+        #             folksy_rules = rules
+
+        #         # from constructor:
+        #         # godliness = mean(0 if not solved else 1 / max(alg_moves,1)) # just try to take smaller step counts on average
+        #         # folkliness = 1 - self.num_rules / self.max_rules
+        #         godliness = 1 / np.array(godliness) # num steps
+        #         folkliness = (1 - np.array(folkliness)) * max_rules # num rules
+        #         pt.xlabel("Number of rules")
+        #         if sp == 0: pt.ylabel("Avg. soln. length")
+
+        #         pt.scatter(folkliness[::10], godliness[::10], color=(.5,)*3, zorder=1)
+        #         pt.scatter(folkliness[best], godliness[best], color=(.0,)*3, zorder=2)
+        #         pt.ylim([0, 25])
+        #         pt.title(name)
+    
+        # pt.tight_layout()
+        # pt.savefig("ftb_s120_pareto.pdf")
+        # pt.show()
+        # pt.close()
 
         # ### show folksy pdb
         # pt.figure(figsize=(15, 10))

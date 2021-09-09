@@ -202,7 +202,7 @@ if __name__ == "__main__":
         from matplotlib import rcParams
         # rcParams['font.family'] = 'sans-serif'
         rcParams['font.family'] = 'serif'
-        rcParams['font.size'] = 9
+        rcParams['font.size'] = 11
         rcParams['text.usetex'] = True
         # rcParams['pdf.fonttype'] = 42
         # rcParams['ps.fonttype'] = 42
@@ -293,28 +293,30 @@ if __name__ == "__main__":
         # pt.tight_layout()
         # pt.show()
 
-        pt.figure(figsize=(3.5, 2.5))
-        pt.subplot(2,1,1)
-        pt.plot(static_incs, 'k-')
-        pt.ylabel("Static")
-        pt.subplot(2,1,2)
+        pt.figure(figsize=(3.5, 1.5))
+        # pt.figure(figsize=(3.5, 2.5))
+        # pt.subplot(2,1,1)
+        # pt.plot(static_incs, 'k-')
+        # pt.ylabel("Static")
+        # pt.subplot(2,1,2)
         pt.plot(true_correct, '-', color=(.75,)*3, label="Ground truth")
         # pt.plot(range(200, len(inc_correct)), inc_correct[200:], '-', color=(0,)*3, label="EMA")
         pt.plot(inc_correct, '-', color=(0,)*3, label="EMA")
         # if inc_sampler == "scrambled":
         #     pt.plot(np.arange(0,len(sampled_correct),10), sampled_correct[::10], ':', color=(0,)*3, label="Random sample")
-        pt.legend(fontsize=9)
+        pt.legend(fontsize=10, loc='lower right')
         pt.ylabel("Correct")
         pt.xlabel("Number of incorporations")
+        pt.yticks([0, 0.5, 1.0])
         pt.tight_layout()
         pt.savefig("acons_%s.pdf" % dump_name)
         pt.show()
         pt.close()
 
-        pt.figure(figsize=(3.5, 1.5))
         data = []
         early_stops, early_trues = [], []
         varphi_stops, varphi_threshes = [], []
+        varphis, trues = [], []
         for rep in range(num_reps):
 
             fname = "N%d%s_D%d_M%d_cn%d_%s_cb%s_r%d" % (
@@ -349,24 +351,40 @@ if __name__ == "__main__":
             if len(varphi_eval) > 0:
                 varphi_stops.append(varphi_eval[0] * eval_period)
                 varphi_threshes.append(inc_correct[varphi_eval[0] * eval_period])
+            
+            for tc in range(len(true_correct)):
+                varphis.append(inc_correct[tc * eval_period])
+                trues.append(true_correct[tc])
 
+
+        fig = pt.figure(figsize=(3.5, 3))
+        gs = fig.add_gridspec(2,2)
+        ax = fig.add_subplot(gs[0,:])
         # pt.hist(data, color=[(1,)*3, (.5,)*3], ec='k')
-        pt.subplot(1,2,1)
         pt.hist(data, bins = np.arange(0,max(data),500), color=(1,)*3, ec='k', rwidth=.75, align="left")
-        pt.xlabel("Convergence")
+        pt.xlabel("Convergence Time")
         pt.ylabel("Frequency")
+        # pt.tight_layout()
+        # pt.savefig("acons_%s_hist.pdf" % cube_str)
+        # pt.show()
 
-        # pt.subplot(1,3,2)
-        # pt.plot(early_stops, early_trues, 'k.')
-        # pt.xlabel("Early stop iteration")
-        # pt.ylabel("True correctness")
-
-        pt.subplot(1,2,2)
+        # pt.figure(figsize=(3.5, 1.5))
+        # pt.subplot(1,2,1)
+        ax = fig.add_subplot(gs[1,0])
         pt.plot(varphi_stops, varphi_threshes, 'k.')
-        pt.xlabel("0.99 Convergence time")
-        pt.ylabel("Threshold")
+        pt.xlabel("0.99 Convergence Time")
+        pt.ylabel("EMA")
+        pt.xticks([0, 5000])
+
+        idx = np.random.permutation(len(varphis))[:1000]
+        # pt.subplot(1,2,2)
+        ax = fig.add_subplot(gs[1,1])
+        pt.plot(np.array(trues)[idx], np.array(varphis)[idx], 'k.')
+        pt.xlabel("Correctness")
+        pt.ylabel("EMA")
 
         pt.tight_layout()
+        # pt.savefig("acons_%s_thresh.pdf" % cube_str)
         pt.savefig("acons_%s_hist.pdf" % cube_str)
         pt.show()
 
