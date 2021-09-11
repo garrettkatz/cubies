@@ -50,7 +50,7 @@ if __name__ == "__main__":
     # config
     do_cons = False
     show_results = True
-    confirm = False
+    confirm = True
     confirm_show = False
 
     # pocket cube: one axis with quarter twists, one with half twists
@@ -249,7 +249,7 @@ if __name__ == "__main__":
         pt.title("Scalarization values")
         pt.tight_layout()
         pt.savefig("ftb_%s.pdf" % dump_name)
-        pt.show()
+        # pt.show()
         pt.close()
 
         pt.figure(figsize=(3.5, 3.25))
@@ -258,7 +258,7 @@ if __name__ == "__main__":
             dump_base = "N%d%s_D%d_M%d_cn%d_%s_P%d_e%s" % (
                 cube_size, cube_str, tree_depth, max_depth, color_neutral, sampler, num_eval_problems, decay_rate)
 
-            most_folksy, folksy_rules = None, None
+            most_folksy, folksy_rules, folksy_rep = None, None, None
             for rep in range(num_reps):
                 dump_name = "%s_r%d" % (dump_base, rep)
                 dump_path = "%s/%s.pkl" % (dump_dir, dump_name)
@@ -284,6 +284,7 @@ if __name__ == "__main__":
                         most_folksy = folkliness[best]
                         fewest_rules = (1 - most_folksy) * max_rules
                         folksy_rules = rules
+                        folksy_rep = rep
     
                     # from constructor:
                     # godliness = mean(0 if not solved else 1 / max(alg_moves,1)) # just try to take smaller step counts on average
@@ -308,7 +309,7 @@ if __name__ == "__main__":
     
         pt.tight_layout()
         pt.savefig("ftb_s120_pareto.pdf")
-        pt.show()
+        # pt.show()
         pt.close()
 
         # pt.figure(figsize=(3.5, 2))
@@ -355,7 +356,7 @@ if __name__ == "__main__":
         # pt.show()
         # pt.close()
 
-        # ### show folksy pdb
+        ### show folksy pdb
         # pt.figure(figsize=(15, 10))
         # patterns, wildcards, macros = folksy_rules
         # numrows = min(7, len(macros))
@@ -377,4 +378,131 @@ if __name__ == "__main__":
         #         ax.set_title(str(macros[rule][m]))
         # # pt.tight_layout()
         # pt.show()
+        # pt.close()
+
+        def fnb(numrows, numcols, sp, state):
+            ax = domain.render_subplot(numrows, numcols, sp, state, x0=-3, txt=False)
+            ax = domain.render_subplot(numrows, numcols, sp, domain.orientations_of(state)[7], x0=3, txt=False)
+            return ax
+
+        pt.figure(figsize=(6.5, 9))
+        patterns, wildcards, macros = folksy_rules
+        # numrows = min(15, max(map(len, macros)) + 3)
+        # numcols = min(7, len(macros))
+        numrows = max(map(len, macros)) + 2
+        numcols = len(macros)
+        for rule in range(numcols):
+            ax = fnb(numrows, numcols, 0*numcols + rule + 1, patterns[rule])
+            ax.set_title(r"$S_{%d}$" % rule)
+            trigger = patterns[rule] * (1 - wildcards[rule])
+            ax = fnb(numrows, numcols, 1*numcols + rule + 1, trigger)
+            ax.set_title(r"$S_{%d} \vee W_{%d}$" % (rule, rule))
+            state = trigger
+            for m in range(len(macros[rule])):
+                state = domain.perform(macros[rule][m], state)
+                ax = fnb(numrows, numcols, (m+2)*numcols + rule + 1, state)
+                ax.set_title(str(macros[rule][m]))
+        pt.tight_layout()
+        pt.savefig("folksy_rules.pdf")
+        pt.show()
+        pt.close()
+
+        # confirm folksy correctness
+        if confirm:
+
+            from pattern_database import PatternDatabase
+            from algorithm import run
+
+            rep = folksy_rep
+            pdb = PatternDatabase(patterns, wildcards, macros, domain)    
+            num_checked = 0
+            num_solved = 0
+            opt_moves = []
+            alg_moves = []
+
+            for p, (prob_state, path) in enumerate(all_probs):
+
+                solved, plan, rule_indices, interstates = run(
+                    prob_state, domain, tree, pdb, max_depth, max_actions, color_neutral)
+                print(rule_indices)
+                num_solved += solved
+    
+                state = prob_state
+                for (sym, actions, macro) in plan:
+                    if color_neutral: state = domain.color_neutral_to(state)[sym]
+                    state = domain.execute(actions, state)
+                    state = domain.execute(macro, state)
+                final_state = state
+        
+                if len(path) > 0:
+                    opt_moves.append(len(path))
+                    alg_moves.append(sum([len(a)+len(m) for _,a,m in plan]))
+
+                num_checked += 1
+                if verbose and p % (10**min(3, int(np.log10(p+1)))) == 0:
+                    print("rep %d: checked %d of %d, %d (%f) solved" % (rep, num_checked, len(all_states), num_solved, num_solved/num_checked))
+        
+                if not solved and confirm_show:
+    
+                    print("num actions:", sum([len(a)+len(m) for _,a,m in plan]))
+    
+                    numcols = 20
+                    numrows = 6
+                    state = prob_state
+                    ax = domain.render_subplot(numrows,numcols,1,state)
+                    ax.set_title("opt path")
+                    for a, action in enumerate(domain.reverse(path)):
+                        state = domain.perform(action, state)
+                        domain.render_subplot(numrows,numcols,a+2,state)
+        
+                    state = prob_state
+                    ax = domain.render_subplot(numrows,numcols,numcols+1,state)
+                    ax.set_title("alg path")
+                    sp = numcols + 2
+                    for p, (sym, actions, macro) in enumerate(plan):
+                        print("actions, sym, macro, rule index")
+                        print(actions, sym, macro,rule_indices[p])
+    
+                        if color_neutral:
+                            state = domain.color_neutral_to(state)[sym]
+                            ax = domain.render_subplot(numrows,numcols, sp, state)
+                            ax.set_title(str(sym))
+                            sp += 1
+    
+                        for a,action in enumerate(actions):
+                            state = domain.perform(action, state)
+                            ax = domain.render_subplot(numrows,numcols, sp, state)
+                            if a == 0:
+                                ax.set_title("|" + str(action))
+                            else:
+                                ax.set_title(str(action))
+                            sp += 1
+    
+                        ax = domain.render_subplot(numrows,numcols, sp, patterns[rule_indices[p]] * (1 - wildcards[rule_indices[p]]))
+                        ax.set_title("trig " + str(chain_lengths[rule_indices[p]]))
+                        sp += 1
+    
+                        ax = domain.render_subplot(numrows,numcols, sp, patterns[rule_indices[p]])
+                        ax.set_title("pattern")
+                        sp += 1
+    
+                        for a,action in enumerate(macro):
+                            state = domain.perform(action, state)
+                            ax = domain.render_subplot(numrows,numcols, sp, state)
+                            if a == len(macro)-1: ax.set_title(str(action) + "|")
+                            else: ax.set_title(str(action))
+                            sp += 1
+        
+                    pt.show()
+        
+                # assert solved == domain.is_solved_in(final_state)
+                # assert solved
+        
+            alg_moves = np.array(alg_moves[1:]) # skip solved state from metrics
+            opt_moves = np.array(opt_moves[1:])
+            alg_opt = alg_moves / opt_moves
+            if verbose: print("alg/opt min,max,mean", (alg_opt.min(), alg_opt.max(), alg_opt.mean()))
+            if verbose: print("alg min,max,mean", (alg_moves.min(), alg_moves.max(), alg_moves.mean()))
+            if verbose: print("Solved %d of %d (%f)" % (num_solved, len(all_states), num_solved/len(all_states)))
+            if verbose: print("Rules %d <= %d (%f)" % (len(patterns), len(all_states), len(patterns)/len(all_states)))
 

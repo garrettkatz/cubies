@@ -297,9 +297,9 @@ class CubeDomain:
                 ax.add_patch(Polygon(xy, facecolor=c, edgecolor='k'))
             if txt: ax.text((N+.1)*axes[0,d], (N+.1)*axes[1,d], str(d))
 
-    def render_subplot(self, numrows, numcols, sp, state):
+    def render_subplot(self, numrows, numcols, sp, state, x0=0, y0=0, txt=True):
         ax = pt.subplot(numrows, numcols, sp)
-        self.render(state, ax, 0, 0)
+        self.render(state, ax, x0, y0, txt)
         ax.axis("equal")
         ax.axis('off')
         return ax
