@@ -268,10 +268,20 @@ class Constructor:
 if __name__ == "__main__":
 
     # config
-    cube_size, num_twist_axes, quarter_turns = 2, 2, True # 29k states
-    # cube_size, num_twist_axes, quarter_turns = 2, 3, False # 24 states
+    # cube_size, num_twist_axes, quarter_turns = 2, 2, True # 29k states
+    # # cube_size, num_twist_axes, quarter_turns = 2, 3, False # 24 states
+    # tree_depth = 14
 
-    tree_depth = 14
+    # pocket cube: one axis with quarter twists, one with half twists
+    # 120 states, max depth 11
+    cube_size = 2
+    valid_actions = (
+        (0,1,1), (0,1,2), (0,1,3),
+        (1,1,2), 
+    )
+    cube_str = "s120"
+    tree_depth = 11
+
     use_safe_depth = False
     max_depth = 1
     max_actions = 30
@@ -288,8 +298,8 @@ if __name__ == "__main__":
     break_seconds = 10 * 60
     verbose = True
 
-    do_cons = False
-    show_results = True
+    do_cons = True
+    show_results = False
     confirm = False
 
     # set up descriptive dump name
@@ -297,12 +307,14 @@ if __name__ == "__main__":
     dump_dir = "rcons"
     # dump_base = "N%da%dq%d_D%d_M%d_cn%d" % (
     #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral)
-    dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s" % (
-        cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, state_sampling)
+    # dump_base = "N%da%dq%d_D%d_M%d_cn%d_%s" % (
+    #     cube_size, num_twist_axes, quarter_turns, tree_depth, max_depth, color_neutral, state_sampling)
+    dump_base = "N%d%s_D%d_M%d_cn%d_%s" % (
+        cube_size, cube_str, tree_depth, max_depth, color_neutral, state_sampling)
 
     import itertools as it
     from cube import CubeDomain
-    valid_actions = tuple(it.product(range(num_twist_axes), range(1,cube_size), range(2-quarter_turns, 4, 2-quarter_turns)))
+    # valid_actions = tuple(it.product(range(num_twist_axes), range(1,cube_size), range(2-quarter_turns, 4, 2-quarter_turns)))
     domain = CubeDomain(cube_size, valid_actions)
     init = domain.solved_state()
 
@@ -320,7 +332,7 @@ if __name__ == "__main__":
 
     if do_cons:
 
-        from time import sleep
+        from time import sleep, perf_counter
 
         for rep in range(num_reps):
 
@@ -328,6 +340,7 @@ if __name__ == "__main__":
             constructor = Constructor(max_rules, rng, domain, tree, max_depth, max_actions, use_safe_depth, color_neutral)
             inc_states = [0] # started with one rule at solved state
     
+            start_time = perf_counter()
             done = False
             for epoch in it.count():
                 if constructor.num_rules in [max_rules, breakpoint]: break
@@ -374,6 +387,7 @@ if __name__ == "__main__":
             # for k in range(10): print(patterns[k])
             # for k in range(10): print(patterns[-k])
 
+            if verbose: print(f"Took {perf_counter()-start_time} seconds")
             if verbose: print("Breaking for %s seconds..." % str(break_seconds))
             sleep(break_seconds)
 
